@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
@@ -8,21 +8,27 @@ import pandas as pd
 import yfinance as yf
 import yaml
 
-from rbdpo.data.loader import load_ohlcv
-from rbdpo.data.preprocessor import preprocess
-from rbdpo.indicators.precompute import precompute_all
-from rbdpo.indicators.registry import DEFAULT_REGISTRY
-from rbdpo.reporting.report import generate_report
-from rbdpo.search.dehb_runner import run_dehb
-from rbdpo.search.space import build_config_space
+from cobra_py.data.loader import load_ohlcv
+from cobra_py.data.preprocessor import preprocess
+from cobra_py.indicators.precompute import precompute_all
+from cobra_py.indicators.registry import DEFAULT_REGISTRY
+from cobra_py.reporting.report import generate_report
+from cobra_py.search.dehb_runner import run_dehb
+from cobra_py.search.space import build_config_space
 
 
 # %% 1. Create examples workspace and environment paths
+def find_project_root(start: Path) -> Path:
+    for p in [start, *start.parents]:
+        if (p / "pyproject.toml").exists() and (p / "configs" / "default.yaml").exists():
+            return p
+    raise RuntimeError("Could not find project root containing pyproject.toml and configs/default.yaml")
+
+
 try:
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = find_project_root(Path(__file__).resolve())
 except NameError:  # pragma: no cover - interactive fallback
-    cwd = Path.cwd()
-    project_root = cwd if cwd.name == "rbdpo" else cwd / "rbdpo"
+    project_root = find_project_root(Path.cwd())
 
 examples_dir = project_root / "examples"
 examples_dir.mkdir(parents=True, exist_ok=True)
@@ -40,7 +46,7 @@ print("Examples dir:", examples_dir)
 # %% 3. Validate imports and runtime paths
 print("cobra-py version:", im.version("cobra-py"))
 print("yfinance version:", yf.__version__)
-print("rbdpo path:", Path(__import__("rbdpo").__file__).resolve())
+print("cobra_py module path:", Path(__import__("cobra_py").__file__).resolve())
 
 
 def deep_update(base: dict, updates: dict) -> dict:
@@ -187,3 +193,5 @@ with (effective_dir / "override_effective.yaml").open("w", encoding="utf-8") as 
 print("Saved artifacts:")
 for p in sorted(examples_dir.iterdir()):
     print(" -", p.name)
+
+

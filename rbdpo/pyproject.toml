@@ -28,12 +28,11 @@ build-backend = "setuptools.build_meta"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["rbdpo*"]
+include = ["cobra_py*"]
 exclude = ["tests*", "configs*", "examples*"]
 
 [project.scripts]
-rbdpo = "rbdpo.cli:main"
-cobra-py = "rbdpo.cli:main"
+cobra-py = "cobra_py.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

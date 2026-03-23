@@ -1,5 +1,5 @@
-# Rule-Based Direct Policy Optimisation (RBDPO)
-## Implementation Plan — v1.0
+﻿# Rule-Based Direct Policy Optimisation (COBRA-py)
+## Implementation Plan â€” v1.0
 
 *Step-by-step guide for building the production package from scratch*
 
@@ -13,19 +13,19 @@
 
 1. [Repository Structure](#1-repository-structure)
 2. [Environment Setup](#2-environment-setup)
-3. [Phase 1 — Data Layer](#3-phase-1--data-layer)
-4. [Phase 2 — Indicator Precomputation Engine](#4-phase-2--indicator-precomputation-engine)
-5. [Phase 3 — Policy Representation](#5-phase-3--policy-representation)
-6. [Phase 4 — Rule Evaluation Engine](#6-phase-4--rule-evaluation-engine)
-7. [Phase 5 — Stop-Loss and Take-Profit Engine](#7-phase-5--stop-loss-and-take-profit-engine)
-8. [Phase 6 — Backtesting Integration (vectorbt)](#8-phase-6--backtesting-integration-vectorbt)
-9. [Phase 7 — Objective Function](#9-phase-7--objective-function)
-10. [Phase 8 — Search Space Encoding (ConfigSpace)](#10-phase-8--search-space-encoding-configspace)
-11. [Phase 9 — Optimiser Integration](#11-phase-9--optimiser-integration)
-12. [Phase 10 — Walk-Forward Validation](#12-phase-10--walk-forward-validation)
-13. [Phase 11 — Results and Reporting](#13-phase-11--results-and-reporting)
-14. [Phase 12 — CLI and Configuration Layer](#14-phase-12--cli-and-configuration-layer)
-15. [Phase 13 — Testing Suite](#15-phase-13--testing-suite)
+3. [Phase 1 â€” Data Layer](#3-phase-1--data-layer)
+4. [Phase 2 â€” Indicator Precomputation Engine](#4-phase-2--indicator-precomputation-engine)
+5. [Phase 3 â€” Policy Representation](#5-phase-3--policy-representation)
+6. [Phase 4 â€” Rule Evaluation Engine](#6-phase-4--rule-evaluation-engine)
+7. [Phase 5 â€” Stop-Loss and Take-Profit Engine](#7-phase-5--stop-loss-and-take-profit-engine)
+8. [Phase 6 â€” Backtesting Integration (vectorbt)](#8-phase-6--backtesting-integration-vectorbt)
+9. [Phase 7 â€” Objective Function](#9-phase-7--objective-function)
+10. [Phase 8 â€” Search Space Encoding (ConfigSpace)](#10-phase-8--search-space-encoding-configspace)
+11. [Phase 9 â€” Optimiser Integration](#11-phase-9--optimiser-integration)
+12. [Phase 10 â€” Walk-Forward Validation](#12-phase-10--walk-forward-validation)
+13. [Phase 11 â€” Results and Reporting](#13-phase-11--results-and-reporting)
+14. [Phase 12 â€” CLI and Configuration Layer](#14-phase-12--cli-and-configuration-layer)
+15. [Phase 13 â€” Testing Suite](#15-phase-13--testing-suite)
 16. [Future Extension Placeholders](#16-future-extension-placeholders)
 17. [Dependency Reference](#17-dependency-reference)
 18. [Implementation Order Summary](#18-implementation-order-summary)
@@ -37,60 +37,60 @@
 Create the following directory and file layout before writing any code. Every module must have a corresponding `__init__.py`.
 
 ```
-rbdpo/
-├── pyproject.toml
-├── uv.lock                     # Committed lock file for reproducibility
-├── README.md
-├── CHANGELOG.md
-├── .python-version             # Pins Python version for uv
-├── configs/
-│   └── default.yaml            # Default run configuration
-├── examples/
-│   └── quickstart.ipynb        # Getting started notebook
-├── rbdpo/
-│   ├── __init__.py
-│   ├── data/
-│   │   ├── __init__.py
-│   │   ├── loader.py           # OHLCV data loading and validation
-│   │   └── preprocessor.py     # Cleaning, resampling, train/test split
-│   ├── indicators/
-│   │   ├── __init__.py
-│   │   ├── precompute.py       # Master precomputation orchestrator
-│   │   ├── registry.py         # Indicator definitions and param spaces
-│   │   └── cache.py            # In-memory indicator store
-│   │   # v2.0 PLACEHOLDER: external_series.py — external time-series registry
-│   ├── policy/
-│   │   ├── __init__.py
-│   │   ├── schema.py           # Policy dataclass definitions
-│   │   ├── rules.py            # Rule archetype implementations
-│   │   ├── sl_tp.py            # Stop-loss / take-profit implementations
-│   │   └── decoder.py          # Convert optimiser config → Policy object
-│   ├── backtest/
-│   │   ├── __init__.py
-│   │   ├── engine.py           # vectorbt backtest runner
-│   │   └── metrics.py          # Performance metric calculations
-│   ├── objective/
-│   │   ├── __init__.py
-│   │   └── function.py         # Named objectives + regularisation
-│   ├── search/
-│   │   ├── __init__.py
-│   │   ├── space.py            # ConfigSpace definition
-│   │   ├── dehb_runner.py      # DEHB optimiser wrapper
-│   │   └── nevergrad_runner.py # Nevergrad optimiser wrapper
-│   ├── validation/
-│   │   ├── __init__.py
-│   │   └── walk_forward.py     # Walk-forward orchestration
-│   └── reporting/
-│       ├── __init__.py
-│       └── report.py           # Results serialisation and human-readable output
-│   # v3.0 PLACEHOLDER: portfolio/ — portfolio-level optimisation loop
-└── tests/
-    ├── conftest.py
-    ├── test_indicators.py
-    ├── test_rules.py
-    ├── test_backtest.py
-    ├── test_objective.py
-    └── test_search_space.py
+cobra_py/
+â”œâ”€â”€ pyproject.toml
+â”œâ”€â”€ uv.lock                     # Committed lock file for reproducibility
+â”œâ”€â”€ README.md
+â”œâ”€â”€ CHANGELOG.md
+â”œâ”€â”€ .python-version             # Pins Python version for uv
+â”œâ”€â”€ configs/
+â”‚   â””â”€â”€ default.yaml            # Default run configuration
+â”œâ”€â”€ examples/
+â”‚   â””â”€â”€ quickstart.ipynb        # Getting started notebook
+â”œâ”€â”€ cobra_py/
+â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”œâ”€â”€ data/
+â”‚   â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”‚   â”œâ”€â”€ loader.py           # OHLCV data loading and validation
+â”‚   â”‚   â””â”€â”€ preprocessor.py     # Cleaning, resampling, train/test split
+â”‚   â”œâ”€â”€ indicators/
+â”‚   â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”‚   â”œâ”€â”€ precompute.py       # Master precomputation orchestrator
+â”‚   â”‚   â”œâ”€â”€ registry.py         # Indicator definitions and param spaces
+â”‚   â”‚   â””â”€â”€ cache.py            # In-memory indicator store
+â”‚   â”‚   # v2.0 PLACEHOLDER: external_series.py â€” external time-series registry
+â”‚   â”œâ”€â”€ policy/
+â”‚   â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”‚   â”œâ”€â”€ schema.py           # Policy dataclass definitions
+â”‚   â”‚   â”œâ”€â”€ rules.py            # Rule archetype implementations
+â”‚   â”‚   â”œâ”€â”€ sl_tp.py            # Stop-loss / take-profit implementations
+â”‚   â”‚   â””â”€â”€ decoder.py          # Convert optimiser config â†’ Policy object
+â”‚   â”œâ”€â”€ backtest/
+â”‚   â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”‚   â”œâ”€â”€ engine.py           # vectorbt backtest runner
+â”‚   â”‚   â””â”€â”€ metrics.py          # Performance metric calculations
+â”‚   â”œâ”€â”€ objective/
+â”‚   â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”‚   â””â”€â”€ function.py         # Named objectives + regularisation
+â”‚   â”œâ”€â”€ search/
+â”‚   â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”‚   â”œâ”€â”€ space.py            # ConfigSpace definition
+â”‚   â”‚   â”œâ”€â”€ dehb_runner.py      # DEHB optimiser wrapper
+â”‚   â”‚   â””â”€â”€ nevergrad_runner.py # Nevergrad optimiser wrapper
+â”‚   â”œâ”€â”€ validation/
+â”‚   â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”‚   â””â”€â”€ walk_forward.py     # Walk-forward orchestration
+â”‚   â””â”€â”€ reporting/
+â”‚       â”œâ”€â”€ __init__.py
+â”‚       â””â”€â”€ report.py           # Results serialisation and human-readable output
+â”‚   # v3.0 PLACEHOLDER: portfolio/ â€” portfolio-level optimisation loop
+â””â”€â”€ tests/
+    â”œâ”€â”€ conftest.py
+    â”œâ”€â”€ test_indicators.py
+    â”œâ”€â”€ test_rules.py
+    â”œâ”€â”€ test_backtest.py
+    â”œâ”€â”€ test_objective.py
+    â””â”€â”€ test_search_space.py
 ```
 
 ---
@@ -126,8 +126,8 @@ uv --version
 ### 2.3 Initialise the Project
 
 ```bash
-uv init rbdpo
-cd rbdpo
+uv init cobra-py
+cd cobra-py
 ```
 
 This creates `pyproject.toml`, `.python-version`, and a basic project scaffold.
@@ -143,7 +143,7 @@ uv add --dev pytest pytest-cov
 
 `uv` writes a `uv.lock` file containing the fully resolved, reproducible dependency tree. Commit this file to version control.
 
-**Note: No TA-Lib.** TA-Lib is explicitly excluded. It requires a compiled C library (`libta-lib`) that varies across operating systems, breaks reproducible containerised environments, and is incompatible with `uv`'s fully managed environment model. `pandas-ta` is a pure-Python library that covers all indicators required by RBDPO and installs without any system prerequisites.
+**Note: No TA-Lib.** TA-Lib is explicitly excluded. It requires a compiled C library (`libta-lib`) that varies across operating systems, breaks reproducible containerised environments, and is incompatible with `uv`'s fully managed environment model. `pandas-ta` is a pure-Python library that covers all indicators required by COBRA-py and installs without any system prerequisites.
 
 ### 2.5 pyproject.toml
 
@@ -151,7 +151,7 @@ uv add --dev pytest pytest-cov
 
 ```toml
 [project]
-name = "rbdpo"
+name = "cobra-py"
 version = "0.1.0"
 description = "Rule-Based Direct Policy Optimisation for trading strategy discovery"
 requires-python = ">=3.11"
@@ -169,7 +169,7 @@ dependencies = [
 ]
 
 [project.scripts]
-rbdpo = "rbdpo.cli:main"
+cobra-py = "cobra_py.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -186,7 +186,7 @@ uv pip install -e .
 All commands are run inside the `uv`-managed environment. Prefix any command with `uv run` to avoid activating the environment manually:
 
 ```bash
-uv run rbdpo run --data data/SPY.csv --config configs/default.yaml
+uv run cobra-py run --data data/SPY.csv --config configs/default.yaml
 uv run pytest tests/
 uv run python examples/quickstart.py
 ```
@@ -200,9 +200,9 @@ source .venv/bin/activate   # macOS / Linux
 
 ---
 
-## 3. Phase 1 — Data Layer
+## 3. Phase 1 â€” Data Layer
 
-### 3.1 `rbdpo/data/loader.py`
+### 3.1 `cobra_py/data/loader.py`
 
 Implement a `load_ohlcv(source, freq=None)` function.
 
@@ -218,7 +218,7 @@ Implement a `load_ohlcv(source, freq=None)` function.
 - Index is sorted ascending
 - Minimum row count check (configurable, default: 500 bars)
 
-### 3.2 `rbdpo/data/preprocessor.py`
+### 3.2 `cobra_py/data/preprocessor.py`
 
 Implement `preprocess(data, config)`:
 
@@ -231,9 +231,9 @@ Both returned DataFrames share the same column structure and pass validation.
 
 ---
 
-## 4. Phase 2 — Indicator Precomputation Engine
+## 4. Phase 2 â€” Indicator Precomputation Engine
 
-### 4.1 `rbdpo/indicators/registry.py`
+### 4.1 `cobra_py/indicators/registry.py`
 
 Define every indicator as a Python dataclass:
 
@@ -278,7 +278,7 @@ Apply this filter in the precomputation orchestrator when generating the Cartesi
 
 > **v2.0 Note:** This registry will be extended with an `ExternalSeriesDef` class for macroeconomic and alternative time-series data.
 
-### 4.2 `rbdpo/indicators/precompute.py`
+### 4.2 `cobra_py/indicators/precompute.py`
 
 Implement `precompute_all(data, registry, n_jobs=-1) -> IndicatorCache`:
 
@@ -290,7 +290,7 @@ Implement `precompute_all(data, registry, n_jobs=-1) -> IndicatorCache`:
 
 **Error handling:** If an individual combination fails (e.g. insufficient data for a given period), log a warning and store `None`. The rule evaluation engine must handle `None` gracefully by returning a `False` array.
 
-### 4.3 `rbdpo/indicators/cache.py`
+### 4.3 `cobra_py/indicators/cache.py`
 
 Implement `IndicatorCache`:
 
@@ -309,13 +309,13 @@ class IndicatorCache:
         """All precomputed parameter tuples for a given indicator."""
 ```
 
-Internal storage: a nested dict `{indicator_name: {(params_tuple, output_name): np.ndarray}}`. Dict lookups are O(1) and negligible versus backtest time. Store arrays as `float32` where precision allows — this halves memory usage with no meaningful impact on indicator accuracy.
+Internal storage: a nested dict `{indicator_name: {(params_tuple, output_name): np.ndarray}}`. Dict lookups are O(1) and negligible versus backtest time. Store arrays as `float32` where precision allows â€” this halves memory usage with no meaningful impact on indicator accuracy.
 
 ---
 
-## 5. Phase 3 — Policy Representation
+## 5. Phase 3 â€” Policy Representation
 
-### 5.1 `rbdpo/policy/schema.py`
+### 5.1 `cobra_py/policy/schema.py`
 
 Define all policy components as frozen Python dataclasses (hashable for caching).
 
@@ -355,7 +355,7 @@ class Policy:
     n_active_exit: int
 ```
 
-### 5.2 `rbdpo/policy/decoder.py`
+### 5.2 `cobra_py/policy/decoder.py`
 
 Implement `decode_config(config: dict, cache: IndicatorCache) -> Policy | None`.
 
@@ -370,34 +370,34 @@ This function is called on every optimiser iteration and must contain no loops o
 
 ---
 
-## 6. Phase 4 — Rule Evaluation Engine
+## 6. Phase 4 â€” Rule Evaluation Engine
 
-### 6.1 `rbdpo/policy/rules.py`
+### 6.1 `cobra_py/policy/rules.py`
 
 Implement `evaluate_rule(rule: RuleConfig, cache: IndicatorCache, price: np.ndarray) -> np.ndarray` where the output is a boolean NumPy array of shape `(T,)`.
 
 Implement each archetype:
 
-**Comparison — `indicator > threshold`:**
+**Comparison â€” `indicator > threshold`:**
 ```python
 arr = cache.get(rule.indicator, rule.params, rule.output)
 return arr > rule.comparand
 ```
 
-**Comparison — `indicator1 > indicator2`:**
+**Comparison â€” `indicator1 > indicator2`:**
 ```python
 arr1 = cache.get(rule.indicator, rule.params, rule.output)
 arr2 = cache.get(rule.indicator2, rule.params2, rule.output2)
 return arr1 > arr2
 ```
 
-**Comparison — `price > indicator`:**
+**Comparison â€” `price > indicator`:**
 ```python
 arr = cache.get(rule.indicator, rule.params, rule.output)
 return price > arr
 ```
 
-**Crossover — `indicator crosses_above threshold`:**
+**Crossover â€” `indicator crosses_above threshold`:**
 ```python
 arr = cache.get(rule.indicator, rule.params, rule.output)
 prev = np.roll(arr, 1)
@@ -406,7 +406,7 @@ signal[0] = False   # mask the rolled first element
 return signal
 ```
 
-**Crossover — `indicator1 crosses_above indicator2`:**
+**Crossover â€” `indicator1 crosses_above indicator2`:**
 ```python
 arr1 = cache.get(rule.indicator, rule.params, rule.output)
 arr2 = cache.get(rule.indicator2, rule.params2, rule.output2)
@@ -416,27 +416,27 @@ signal[0] = False
 return signal
 ```
 
-**Band test — `price above band_upper`:**
+**Band test â€” `price above band_upper`:**
 ```python
 upper = cache.get(rule.indicator, rule.params, 'upper')
 return price > upper
 ```
 
-**Pattern — `price at N-bar high`:**
+**Pattern â€” `price at N-bar high`:**
 ```python
 rolling_max = pd.Series(price).rolling(rule.lookback).max().values
 return price >= rolling_max
 ```
 
-**Pattern — `consecutive(condition, count)`:** Apply rolling sum; return `rolling_sum >= count`.
+**Pattern â€” `consecutive(condition, count)`:** Apply rolling sum; return `rolling_sum >= count`.
 
-**Derivative — `slope(indicator) > 0`:**
+**Derivative â€” `slope(indicator) > 0`:**
 ```python
 arr = cache.get(rule.indicator, rule.params, rule.output)
 return np.diff(arr, prepend=arr[0]) > 0
 ```
 
-**Statistical — `zscore > threshold`:**
+**Statistical â€” `zscore > threshold`:**
 ```python
 arr = cache.get(rule.indicator, rule.params, rule.output)
 s = pd.Series(arr)
@@ -457,9 +457,9 @@ return np.logical_and.reduce(signals)
 
 ---
 
-## 7. Phase 5 — Stop-Loss and Take-Profit Engine
+## 7. Phase 5 â€” Stop-Loss and Take-Profit Engine
 
-### 7.1 `rbdpo/policy/sl_tp.py`
+### 7.1 `cobra_py/policy/sl_tp.py`
 
 Implement functions that compute SL and TP price levels as 1D arrays of shape `(T,)`, given the current close price at each bar. These arrays are passed to vectorbt's stop generators.
 
@@ -485,19 +485,19 @@ Implement functions that compute SL and TP price levels as 1D arrays of shape `(
 
 ---
 
-## 8. Phase 6 — Backtesting Integration (vectorbt)
+## 8. Phase 6 â€” Backtesting Integration (vectorbt)
 
-### 8.1 `rbdpo/backtest/engine.py`
+### 8.1 `cobra_py/backtest/engine.py`
 
 Implement `run_backtest(policy, cache, data, config) -> dict`.
 
 Step-by-step:
 
 1. Extract `close`, `high`, `low` as NumPy arrays.
-2. Call `combine_rules(policy.entry_rules, cache, close)` → `entry_signals`.
-3. If `policy.exit_rules` is non-empty, call `combine_rules(policy.exit_rules, cache, close)` → `exit_signals`. Otherwise `exit_signals = None`.
-4. Call `compute_sl(policy.sl_config, ...)` → `sl_levels`.
-5. Call `compute_tp(policy.tp_config, ...)` → `tp_levels`.
+2. Call `combine_rules(policy.entry_rules, cache, close)` â†’ `entry_signals`.
+3. If `policy.exit_rules` is non-empty, call `combine_rules(policy.exit_rules, cache, close)` â†’ `exit_signals`. Otherwise `exit_signals = None`.
+4. Call `compute_sl(policy.sl_config, ...)` â†’ `sl_levels`.
+5. Call `compute_tp(policy.tp_config, ...)` â†’ `tp_levels`.
 6. Convert all arrays to `pd.Series` with the DatetimeIndex from `data` (vectorbt requires this).
 7. Build SL exits: `vbt.STOPLOSS.run(close, entries=entry_signals, stop=sl_pct, trailing=is_trailing).exits`.
 8. Build TP exits: `vbt.TAKEPROFIT.run(close, entries=entry_signals, stop=tp_pct).exits`.
@@ -514,7 +514,7 @@ Step-by-step:
 | `slippage` | 0.0005 | Slippage per trade |
 | `freq` | `'1D'` | Data frequency string |
 
-### 8.2 `rbdpo/backtest/metrics.py`
+### 8.2 `cobra_py/backtest/metrics.py`
 
 Implement `extract_metrics(portfolio) -> dict`:
 
@@ -535,9 +535,9 @@ Replace NaN and infinity values with `-999.0` as a sentinel (signals degenerate 
 
 ---
 
-## 9. Phase 7 — Objective Function
+## 9. Phase 7 â€” Objective Function
 
-### 9.1 `rbdpo/objective/function.py`
+### 9.1 `cobra_py/objective/function.py`
 
 Implement `compute_objective(metrics, policy, config) -> float`.
 
@@ -584,9 +584,9 @@ def compute_objective(metrics, policy, config):
 
 ---
 
-## 10. Phase 8 — Search Space Encoding (ConfigSpace)
+## 10. Phase 8 â€” Search Space Encoding (ConfigSpace)
 
-### 10.1 `rbdpo/search/space.py`
+### 10.1 `cobra_py/search/space.py`
 
 Implement `build_config_space(n_entry_rules, n_exit_rules, registry) -> ConfigurationSpace`.
 
@@ -709,9 +709,9 @@ Implement `sample_and_validate(cs, n_samples=10)` to verify that sampled configu
 
 ---
 
-## 11. Phase 9 — Optimiser Integration
+## 11. Phase 9 â€” Optimiser Integration
 
-### 11.1 DEHB Runner — `rbdpo/search/dehb_runner.py`
+### 11.1 DEHB Runner â€” `cobra_py/search/dehb_runner.py`
 
 Implement `run_dehb(objective_fn, config_space, budget, min_fidelity, max_fidelity, n_workers, seed) -> OptimisationResult`.
 
@@ -747,14 +747,14 @@ optimizer = DEHB(
     max_fidelity=max_fidelity,   # e.g. 1.0
     eta=3,                       # Hyperband halving factor
     n_workers=n_workers,
-    seed=seed                    # ← reproducibility / diversity control
+    seed=seed                    # â† reproducibility / diversity control
 )
 history = optimizer.run(total_cost=budget)
 ```
 
-**Seed usage note.** The same `seed` with the same configuration guarantees an identical sequence of evaluations. Running with `seed=42`, `seed=123`, `seed=999` etc. explores different regions of the search space and produces qualitatively different strategies — useful for building a diverse strategy ensemble.
+**Seed usage note.** The same `seed` with the same configuration guarantees an identical sequence of evaluations. Running with `seed=42`, `seed=123`, `seed=999` etc. explores different regions of the search space and produces qualitatively different strategies â€” useful for building a diverse strategy ensemble.
 
-### 11.2 Nevergrad Runner — `rbdpo/search/nevergrad_runner.py`
+### 11.2 Nevergrad Runner â€” `cobra_py/search/nevergrad_runner.py`
 
 Implement `run_nevergrad(objective_fn, config_space, budget, seed) -> OptimisationResult`.
 
@@ -799,9 +799,9 @@ The `seed` field is included explicitly so that every result is traceable to its
 
 ---
 
-## 12. Phase 10 — Walk-Forward Validation
+## 12. Phase 10 â€” Walk-Forward Validation
 
-### 12.1 `rbdpo/validation/walk_forward.py`
+### 12.1 `cobra_py/validation/walk_forward.py`
 
 Implement `walk_forward_validate(data, optimise_fn, config, n_splits, train_pct) -> WalkForwardResult`.
 
@@ -835,9 +835,9 @@ class WalkForwardResult:
 
 ---
 
-## 13. Phase 11 — Results and Reporting
+## 13. Phase 11 â€” Results and Reporting
 
-### 13.1 `rbdpo/reporting/report.py`
+### 13.1 `cobra_py/reporting/report.py`
 
 Implement `generate_report(result, wf_result, output_path)`.
 
@@ -854,10 +854,10 @@ Entry conditions (ALL must be true simultaneously):
   Rule 3: ATR(14) is above its 20-period rolling mean
 
 Exit conditions:
-  (none — exits driven by stop-loss and take-profit only)
+  (none â€” exits driven by stop-loss and take-profit only)
 
-Stop-loss:  2.0 × ATR(14) below entry price
-Take-profit: 3.0 × ATR(14) above entry price
+Stop-loss:  2.0 Ã— ATR(14) below entry price
+Take-profit: 3.0 Ã— ATR(14) above entry price
 ```
 
 Implement `policy_to_human_readable(policy) -> str` to produce this output for any policy.
@@ -870,7 +870,7 @@ Implement `policy_to_human_readable(policy) -> str` to produce this output for a
 
 ---
 
-## 14. Phase 12 — CLI and Configuration Layer
+## 14. Phase 12 â€” CLI and Configuration Layer
 
 ### 14.1 `configs/default.yaml`
 
@@ -916,30 +916,30 @@ output:
   path: './results/'
 ```
 
-### 14.2 CLI Entry Points — `rbdpo/cli.py`
+### 14.2 CLI Entry Points â€” `cobra_py/cli.py`
 
 Using `click`:
 
 ```bash
 # Run full optimisation pipeline
-rbdpo run --data path/to/data.csv --config configs/default.yaml --output results/
+cobra-py run --data path/to/data.csv --config configs/default.yaml --output results/
 
 # Run with a specific objective and seed (override config file)
-rbdpo run --data data.csv --objective calmar --seed 123
+cobra-py run --data data.csv --objective calmar --seed 123
 
 # Generate human-readable report from saved result
-rbdpo report --result results/result.json
+cobra-py report --result results/result.json
 
 # Validate a saved policy on new out-of-sample data
-rbdpo validate --policy results/best_policy.yaml --data path/to/new_data.csv
+cobra-py validate --policy results/best_policy.yaml --data path/to/new_data.csv
 
 # Run multiple seeds in sequence to build a diverse strategy set
-rbdpo sweep --data data.csv --seeds 42 123 999 777 --objective sharpe
+cobra-py sweep --data data.csv --seeds 42 123 999 777 --objective sharpe
 ```
 
 ---
 
-## 15. Phase 13 — Testing Suite
+## 15. Phase 13 â€” Testing Suite
 
 ### 15.1 `tests/conftest.py`
 
@@ -980,7 +980,7 @@ Shared fixtures:
 ### 15.3 Running Tests
 
 ```bash
-uv run pytest tests/ -v --cov=rbdpo --cov-report=term-missing
+uv run pytest tests/ -v --cov=cobra_py --cov-report=term-missing
 ```
 
 All tests must pass before proceeding to integration testing or live validation.
@@ -993,26 +993,26 @@ All tests must pass before proceeding to integration testing or live validation.
 
 The following modules are reserved for the v2.0 external data extension. Do not implement in v1.0.
 
-- `rbdpo/indicators/external_series.py` — external series registry and alignment utilities
-- Additional archetype `EXTERNAL_COMPARISON` in `rbdpo/policy/rules.py`
-- Additional ConfigSpace slots in `rbdpo/search/space.py` for external series parameters
+- `cobra_py/indicators/external_series.py` â€” external series registry and alignment utilities
+- Additional archetype `EXTERNAL_COMPARISON` in `cobra_py/policy/rules.py`
+- Additional ConfigSpace slots in `cobra_py/search/space.py` for external series parameters
 - Updated `configs/default.yaml` with an `external_data` section
 
 The v1.0 architecture should be designed so that adding these modules does not require changes to the backtesting engine, optimiser integration, or reporting layer.
 
 ### 16.2 Portfolio-Level Optimisation Loop (v3.0)
 
-> **[PLACEHOLDER — To Be Specified]**
+> **[PLACEHOLDER â€” To Be Specified]**
 >
-> The `rbdpo/portfolio/` directory is reserved for the v3.0 portfolio extension. This will be designed and implemented after the MVP has been validated in production.
+> The `cobra_py/portfolio/` directory is reserved for the v3.0 portfolio extension. This will be designed and implemented after the MVP has been validated in production.
 >
 > Expected components:
-> - `rbdpo/portfolio/universe.py` — multi-instrument data management
-> - `rbdpo/portfolio/portfolio_objective.py` — portfolio-level objective (joint Sharpe, correlation, etc.)
-> - `rbdpo/portfolio/outer_loop.py` — second-level optimisation loop selecting and sizing per-instrument strategies
-> - `rbdpo/portfolio/risk_constraints.py` — position limits, volatility targets, drawdown budgets
+> - `cobra_py/portfolio/universe.py` â€” multi-instrument data management
+> - `cobra_py/portfolio/portfolio_objective.py` â€” portfolio-level objective (joint Sharpe, correlation, etc.)
+> - `cobra_py/portfolio/outer_loop.py` â€” second-level optimisation loop selecting and sizing per-instrument strategies
+> - `cobra_py/portfolio/risk_constraints.py` â€” position limits, volatility targets, drawdown budgets
 >
-> The single-instrument backtest engine (`rbdpo/backtest/`) will be reused without modification as the inner evaluation loop.
+> The single-instrument backtest engine (`cobra_py/backtest/`) will be reused without modification as the inner evaluation loop.
 >
 > Full specification to follow once MVP is validated.
 
@@ -1064,9 +1064,12 @@ Build and test each phase before starting the next.
 | 9 | `search/dehb_runner.py` | 10-evaluation test run with `seed=42` completes and returns an `OptimisationResult`; rerun with `seed=42` produces identical result |
 | 10 | `validation/walk_forward.py` | 3-fold walk-forward on small data completes; OOS metrics are logged per fold |
 | 11 | `reporting/report.py` | YAML and JSON report files written correctly; human-readable policy string is accurate |
-| 12 | `cli.py`, `configs/` | `uv run rbdpo run` executes end-to-end on sample data without error |
-| 13 | `tests/` | All tests pass with ≥ 80% coverage |
+| 12 | `cli.py`, `configs/` | `uv run cobra-py run` executes end-to-end on sample data without error |
+| 13 | `tests/` | All tests pass with â‰¥ 80% coverage |
 
 ---
 
-*End of Implementation Plan — v1.0*
+*End of Implementation Plan â€” v1.0*
+
+
+

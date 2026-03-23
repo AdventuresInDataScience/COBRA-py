@@ -1,5 +1,5 @@
-from rbdpo.objective.function import compute_objective
-from rbdpo.policy.schema import Policy, RuleConfig, SLConfig, TPConfig
+﻿from cobra_py.objective.function import compute_objective
+from cobra_py.policy.schema import Policy, RuleConfig, SLConfig, TPConfig
 
 
 RULE = RuleConfig("comparison", "rsi", (14,), "rsi", ">", 50.0)
@@ -18,3 +18,4 @@ def test_complexity_penalty():
     small = compute_objective(m, POLICY_SMALL, {"objective": "sharpe", "complexity_penalty": 0.1})
     large = compute_objective(m, POLICY_LARGE, {"objective": "sharpe", "complexity_penalty": 0.1})
     assert large > small
+

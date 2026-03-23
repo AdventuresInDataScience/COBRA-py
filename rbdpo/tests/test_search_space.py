@@ -1,5 +1,5 @@
-from rbdpo.indicators.registry import DEFAULT_REGISTRY
-from rbdpo.search.space import build_config_space, sample_and_validate
+﻿from cobra_py.indicators.registry import DEFAULT_REGISTRY
+from cobra_py.search.space import build_config_space, sample_and_validate
 
 
 def test_space_samples_without_error():
@@ -15,3 +15,4 @@ def test_seed_determinism():
     seq1 = [cs1.sample_configuration() for _ in range(5)]
     seq2 = [cs2.sample_configuration() for _ in range(5)]
     assert seq1 == seq2
+

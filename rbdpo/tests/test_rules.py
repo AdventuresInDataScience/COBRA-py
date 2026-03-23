@@ -1,7 +1,7 @@
-import numpy as np
+﻿import numpy as np
 
-from rbdpo.policy.rules import evaluate_rule
-from rbdpo.policy.schema import RuleConfig
+from cobra_py.policy.rules import evaluate_rule
+from cobra_py.policy.schema import RuleConfig
 
 
 def test_comparison_rule_output_shape(sample_ohlcv_data, small_cache):
@@ -32,3 +32,4 @@ def test_crossover_triggers_known_cross(sample_ohlcv_data, small_cache):
     out = evaluate_rule(rule, small_cache, price)
     assert not bool(out[0])
     assert np.any(out)
+

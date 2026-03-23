@@ -1,16 +1,16 @@
-# RBDPO — Rule-Based Direct Policy Optimisation
+﻿# COBRA-py â€” Rule-Based Direct Policy Optimisation
 
 **Automatically discover interpretable trading strategies using black-box optimisation.**
 
-RBDPO searches a structured space of human-readable technical trading rules and finds the best-performing strategy for a given objective — without neural networks, without black-box models, and without any post-hoc explanation needed.
+COBRA-py searches a structured space of human-readable technical trading rules and finds the best-performing strategy for a given objective â€” without neural networks, without black-box models, and without any post-hoc explanation needed.
 
-Every strategy produced by RBDPO is a plain set of indicator conditions you can read, understand, and deploy in a few lines of code.
+Every strategy produced by COBRA-py is a plain set of indicator conditions you can read, understand, and deploy in a few lines of code.
 
 ---
 
 ## What It Does
 
-Given historical OHLCV price data and a performance objective (e.g. maximise Sharpe ratio), RBDPO:
+Given historical OHLCV price data and a performance objective (e.g. maximise Sharpe ratio), COBRA-py:
 
 1. **Precomputes** thousands of technical indicator arrays across all parameter combinations
 2. **Searches** the space of possible rule combinations using a multi-fidelity black-box optimiser
@@ -27,8 +27,8 @@ Entry conditions (ALL must be true simultaneously):
   Rule 2: Close price is above EMA(50)
   Rule 3: ATR(14) is above its 20-period rolling mean
 
-Stop-loss:  2.0 × ATR(14) below entry price
-Take-profit: 3.0 × ATR(14) above entry price
+Stop-loss:  2.0 Ã— ATR(14) below entry price
+Take-profit: 3.0 Ã— ATR(14) above entry price
 
 In-sample Sharpe:  1.43
 Out-of-sample Sharpe:  1.11
@@ -47,7 +47,7 @@ Version 1.0 operates on **single-instrument OHLCV data only**. Two extensions ar
 
 ## Installation
 
-RBDPO uses [`uv`](https://github.com/astral-sh/uv) for environment management. All dependencies are pure Python — no C library compilation required.
+COBRA-py uses [`uv`](https://github.com/astral-sh/uv) for environment management. All dependencies are pure Python â€” no C library compilation required.
 
 ### 1. Install uv
 
@@ -62,8 +62,8 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ### 2. Clone and install
 
 ```bash
-git clone https://github.com/your-org/rbdpo.git
-cd rbdpo
+git clone https://github.com/your-org/cobra-py.git
+cd cobra-py
 uv sync          # installs all dependencies from uv.lock
 uv pip install -e .
 ```
@@ -71,7 +71,7 @@ uv pip install -e .
 ### 3. Verify
 
 ```bash
-uv run rbdpo --help
+uv run cobra-py --help
 ```
 
 ---
@@ -82,28 +82,28 @@ uv run rbdpo --help
 
 ```bash
 # Run with default settings (Sharpe objective, seed 42)
-uv run rbdpo run --data data/SPY_daily.csv --output results/
+uv run cobra-py run --data data/SPY_daily.csv --output results/
 
 # Choose a different objective
-uv run rbdpo run --data data/SPY_daily.csv --objective calmar
+uv run cobra-py run --data data/SPY_daily.csv --objective calmar
 
 # Change the seed (produces a different strategy)
-uv run rbdpo run --data data/SPY_daily.csv --seed 123
+uv run cobra-py run --data data/SPY_daily.csv --seed 123
 
 # Run multiple seeds and compare results
-uv run rbdpo sweep --data data/SPY_daily.csv --seeds 42 123 999 --objective sharpe
+uv run cobra-py sweep --data data/SPY_daily.csv --seeds 42 123 999 --objective sharpe
 ```
 
 ### From Python
 
 ```python
-from rbdpo.data.loader import load_ohlcv
-from rbdpo.data.preprocessor import preprocess
-from rbdpo.indicators.precompute import precompute_all
-from rbdpo.indicators.registry import DEFAULT_REGISTRY
-from rbdpo.search.dehb_runner import run_dehb
-from rbdpo.search.space import build_config_space
-from rbdpo.reporting.report import generate_report
+from cobra_py.data.loader import load_ohlcv
+from cobra_py.data.preprocessor import preprocess
+from cobra_py.indicators.precompute import precompute_all
+from cobra_py.indicators.registry import DEFAULT_REGISTRY
+from cobra_py.search.dehb_runner import run_dehb
+from cobra_py.search.space import build_config_space
+from cobra_py.reporting.report import generate_report
 
 # Load data
 data = load_ohlcv('data/SPY_daily.csv')
@@ -160,21 +160,21 @@ validation:
 Override any setting at the CLI:
 
 ```bash
-uv run rbdpo run --data data.csv --objective sortino --seed 999 --budget 1000
+uv run cobra-py run --data data.csv --objective sortino --seed 999 --budget 1000
 ```
 
 ---
 
 ## Reproducibility and Diversity
 
-RBDPO is designed to be both **reproducible** and **diverse**:
+COBRA-py is designed to be both **reproducible** and **diverse**:
 
 - **Reproducibility:** The same seed + same config always produces the same strategy. The seed is recorded in every output file.
 - **Diversity:** Running different seeds with the same config explores different regions of the search space, producing qualitatively different strategies. This is useful for building a portfolio of uncorrelated rules.
 
 ```bash
 # Build a diverse strategy set
-uv run rbdpo sweep --data data.csv --seeds 42 123 456 789 999 --objective sharpe --output results/ensemble/
+uv run cobra-py sweep --data data.csv --seeds 42 123 456 789 999 --objective sharpe --output results/ensemble/
 ```
 
 ---
@@ -229,19 +229,19 @@ Rules are parameterised templates, not hardcoded instances. The optimiser select
 ## Project Structure
 
 ```
-rbdpo/
-├── configs/default.yaml       # Default configuration
-├── examples/quickstart.ipynb  # Worked example notebook
-├── rbdpo/
-│   ├── data/                  # Data loading and preprocessing
-│   ├── indicators/            # Indicator precomputation and cache
-│   ├── policy/                # Policy schema, rules, SL/TP, decoder
-│   ├── backtest/              # vectorbt integration and metrics
-│   ├── objective/             # Named objectives and regularisation
-│   ├── search/                # ConfigSpace + DEHB / Nevergrad runners
-│   ├── validation/            # Walk-forward validation
-│   └── reporting/             # Results serialisation and human-readable output
-└── tests/                     # Full test suite
+cobra_py/
+â”œâ”€â”€ configs/default.yaml       # Default configuration
+â”œâ”€â”€ examples/quickstart.ipynb  # Worked example notebook
+â”œâ”€â”€ cobra_py/
+â”‚   â”œâ”€â”€ data/                  # Data loading and preprocessing
+â”‚   â”œâ”€â”€ indicators/            # Indicator precomputation and cache
+â”‚   â”œâ”€â”€ policy/                # Policy schema, rules, SL/TP, decoder
+â”‚   â”œâ”€â”€ backtest/              # vectorbt integration and metrics
+â”‚   â”œâ”€â”€ objective/             # Named objectives and regularisation
+â”‚   â”œâ”€â”€ search/                # ConfigSpace + DEHB / Nevergrad runners
+â”‚   â”œâ”€â”€ validation/            # Walk-forward validation
+â”‚   â””â”€â”€ reporting/             # Results serialisation and human-readable output
+â””â”€â”€ tests/                     # Full test suite
 ```
 
 ---
@@ -249,14 +249,14 @@ rbdpo/
 ## Running Tests
 
 ```bash
-uv run pytest tests/ -v --cov=rbdpo --cov-report=term-missing
+uv run pytest tests/ -v --cov=cobra_py --cov-report=term-missing
 ```
 
 ---
 
 ## Design Philosophy
 
-RBDPO is built around three principles:
+COBRA-py is built around three principles:
 
 1. **Interpretability by construction.** The policy grammar only produces strategies a practitioner can read and reason about. Interpretability is not a post-processing step.
 
@@ -268,14 +268,14 @@ RBDPO is built around three principles:
 
 ## Academic Context
 
-RBDPO draws on several bodies of literature:
+COBRA-py draws on several bodies of literature:
 
-- **Genetic programming for trading** (Allen & Karjalainen 1999; Neely et al. 1997) — shares the rule-space philosophy but replaces evolutionary operators with modern black-box optimisers
-- **Hyperparameter optimisation** (DEHB — Awad et al. 2021; ConfigSpace — Lindauer et al. 2019) — the core algorithmic machinery is borrowed from the AutoML literature
-- **Direct policy search** (Salimans et al. 2017; Wang et al. 2020) — offline black-box search over a bounded policy class
-- **Backtest bias and overfitting** (Bailey et al. 2017; Sullivan et al. 1999) — walk-forward validation and complexity regularisation address documented pitfalls
+- **Genetic programming for trading** (Allen & Karjalainen 1999; Neely et al. 1997) â€” shares the rule-space philosophy but replaces evolutionary operators with modern black-box optimisers
+- **Hyperparameter optimisation** (DEHB â€” Awad et al. 2021; ConfigSpace â€” Lindauer et al. 2019) â€” the core algorithmic machinery is borrowed from the AutoML literature
+- **Direct policy search** (Salimans et al. 2017; Wang et al. 2020) â€” offline black-box search over a bounded policy class
+- **Backtest bias and overfitting** (Bailey et al. 2017; Sullivan et al. 1999) â€” walk-forward validation and complexity regularisation address documented pitfalls
 
-See the [Summary & Design Document](RBDPO_Summary_Design.md) for a detailed literature comparison and full reference list.
+See the [Summary & Design Document](COBRA-py_Summary_Design.md) for a detailed literature comparison and full reference list.
 
 ---
 
@@ -288,3 +288,6 @@ MIT
 ## Contributing
 
 Contributions welcome. Please open an issue before starting work on a new feature. All PRs must pass the test suite (`uv run pytest tests/`) and include tests for any new functionality.
+
+
+

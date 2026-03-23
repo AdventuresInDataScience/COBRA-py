@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 # %% 1. Setup: imports and paths
 from copy import deepcopy
@@ -10,20 +10,26 @@ import pandas as pd
 import yfinance as yf
 import yaml
 
-from rbdpo.backtest.engine import run_backtest
-from rbdpo.data.loader import load_ohlcv
-from rbdpo.data.preprocessor import preprocess
-from rbdpo.indicators.precompute import precompute_all
-from rbdpo.indicators.registry import DEFAULT_REGISTRY
-from rbdpo.reporting.report import generate_report
-from rbdpo.search.dehb_runner import run_dehb
-from rbdpo.search.space import build_config_space
+from cobra_py.backtest.engine import run_backtest
+from cobra_py.data.loader import load_ohlcv
+from cobra_py.data.preprocessor import preprocess
+from cobra_py.indicators.precompute import precompute_all
+from cobra_py.indicators.registry import DEFAULT_REGISTRY
+from cobra_py.reporting.report import generate_report
+from cobra_py.search.dehb_runner import run_dehb
+from cobra_py.search.space import build_config_space
+
+def find_project_root(start: Path) -> Path:
+    for p in [start, *start.parents]:
+        if (p / "pyproject.toml").exists() and (p / "configs" / "default.yaml").exists():
+            return p
+    raise RuntimeError("Could not find project root containing pyproject.toml and configs/default.yaml")
+
 
 try:
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = find_project_root(Path(__file__).resolve())
 except NameError:  # pragma: no cover - interactive fallback
-    cwd = Path.cwd()
-    project_root = cwd if cwd.name == "rbdpo" else cwd / "rbdpo"
+    project_root = find_project_root(Path.cwd())
 
 examples_dir = project_root / "examples"
 showcase_dir = examples_dir / "showcase_results"
@@ -384,3 +390,4 @@ print("\nCLI equivalents from project root:")
 print("uv run cobra-py run --data <your_csv> --config configs/default.yaml")
 print("uv run cobra-py run --data <your_csv> --objective calmar --seed 123 --budget 25")
 print("uv run cobra-py sweep --data <your_csv> --seeds 42 123 999 --objective sharpe")
+

@@ -1,3 +1,2 @@
 [console_scripts]
-cobra-py = rbdpo.cli:main
-rbdpo = rbdpo.cli:main
+cobra-py = cobra_py.cli:main

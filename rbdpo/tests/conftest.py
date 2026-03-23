@@ -1,12 +1,12 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from rbdpo.indicators.precompute import precompute_all
-from rbdpo.indicators.registry import DEFAULT_REGISTRY
-from rbdpo.policy.schema import Policy, RuleConfig, SLConfig, TPConfig
+from cobra_py.indicators.precompute import precompute_all
+from cobra_py.indicators.registry import DEFAULT_REGISTRY
+from cobra_py.policy.schema import Policy, RuleConfig, SLConfig, TPConfig
 
 
 @pytest.fixture()
@@ -51,3 +51,4 @@ def simple_policy() -> Policy:
         n_active_entry=1,
         n_active_exit=0,
     )
+

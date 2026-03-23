@@ -1,10 +1,10 @@
-# COBRA-py MVP
+﻿# COBRA-py MVP
 
 COBRA-py Stage 1 (MVP) implementation for interpretable rule-based trading strategy discovery.
 
 ## First Run (3 Commands)
 
-From [rbdpo](rbdpo):
+From the project root:
 
 ```bash
 uv venv .venv
@@ -40,15 +40,15 @@ Core project layout and purpose:
 
 - [pyproject.toml](pyproject.toml): package metadata, dependencies, CLI entry points, and build configuration.
 - [configs/default.yaml](configs/default.yaml): default runtime settings for data, policy, objective, optimiser, backtest, and output.
-- [rbdpo/cli.py](rbdpo/cli.py): CLI commands (`run`, `report`, `validate`, `sweep`).
-- [rbdpo/data](rbdpo/data): OHLCV loading, validation, and train/test preprocessing.
-- [rbdpo/indicators](rbdpo/indicators): indicator registry, precomputation orchestration, and cache.
-- [rbdpo/policy](rbdpo/policy): rule schema, rule evaluation, stop-loss/take-profit logic, and config decoder.
-- [rbdpo/backtest](rbdpo/backtest): backtest engine and metric extraction.
-- [rbdpo/objective](rbdpo/objective): objective scoring and complexity regularization.
-- [rbdpo/search](rbdpo/search): search space and optimisation runners.
-- [rbdpo/validation](rbdpo/validation): walk-forward validation flow.
-- [rbdpo/reporting](rbdpo/reporting): JSON/YAML reports and human-readable strategy rendering.
+- [cobra_py/cli.py](cobra_py/cli.py): CLI commands (`run`, `report`, `validate`, `sweep`).
+- [cobra_py/data](cobra_py/data): OHLCV loading, validation, and train/test preprocessing.
+- [cobra_py/indicators](cobra_py/indicators): indicator registry, precomputation orchestration, and cache.
+- [cobra_py/policy](cobra_py/policy): rule schema, rule evaluation, stop-loss/take-profit logic, and config decoder.
+- [cobra_py/backtest](cobra_py/backtest): backtest engine and metric extraction.
+- [cobra_py/objective](cobra_py/objective): objective scoring and complexity regularization.
+- [cobra_py/search](cobra_py/search): search space and optimisation runners.
+- [cobra_py/validation](cobra_py/validation): walk-forward validation flow.
+- [cobra_py/reporting](cobra_py/reporting): JSON/YAML reports and human-readable strategy rendering.
 - [examples](examples): block-runnable demos and showcase scripts.
 - [tests](tests): pytest suite for indicators, rules, backtest, objective, and search-space behavior.
 
@@ -66,3 +66,4 @@ Core project layout and purpose:
 	- plots equity/return/sharpe comparisons
 	- runs mini walk-forward OOS comparison
 	- writes CSV summaries and PNG charts
+
