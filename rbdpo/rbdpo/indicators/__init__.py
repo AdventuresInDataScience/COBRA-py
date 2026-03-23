@@ -1,0 +1,1 @@
+"""Indicator precomputation and cache."""

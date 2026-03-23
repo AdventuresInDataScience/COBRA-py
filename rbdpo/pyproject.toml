@@ -1,0 +1,39 @@
+[project]
+name = "cobra-py"
+version = "0.1.0"
+description = "COBRA-py: interpretable rule-based trading strategy discovery"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "joblib>=1.3",
+    "pyyaml>=6.0",
+    "click>=8.1",
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+
+[project.optional-dependencies]
+optim = [
+    "ConfigSpace>=0.7",
+    "DEHB>=0.0.6",
+    "nevergrad>=1.0",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["rbdpo*"]
+exclude = ["tests*", "configs*", "examples*"]
+
+[project.scripts]
+rbdpo = "rbdpo.cli:main"
+cobra-py = "rbdpo.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

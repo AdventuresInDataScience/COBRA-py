@@ -1,0 +1,16 @@
+Metadata-Version: 2.4
+Name: cobra-py
+Version: 0.1.0
+Summary: COBRA-py: interpretable rule-based trading strategy discovery
+Requires-Python: >=3.11
+Requires-Dist: numpy>=1.26
+Requires-Dist: pandas>=2.0
+Requires-Dist: joblib>=1.3
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: click>=8.1
+Requires-Dist: pytest>=7.4
+Requires-Dist: pytest-cov>=4.1
+Provides-Extra: optim
+Requires-Dist: ConfigSpace>=0.7; extra == "optim"
+Requires-Dist: DEHB>=0.0.6; extra == "optim"
+Requires-Dist: nevergrad>=1.0; extra == "optim"
