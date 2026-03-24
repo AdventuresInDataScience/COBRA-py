@@ -22,7 +22,13 @@ def _load_config(config_path: str | None) -> dict:
         root = Path(__file__).resolve().parents[1]
         config_path = str(root / "configs" / "default.yaml")
     with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        return yaml.safe_load(f) or {}
+
+
+def _ensure_config_sections(cfg: dict) -> dict:
+    for section in ("data", "indicators", "policy", "backtest", "objective", "optimiser", "validation", "output"):
+        cfg.setdefault(section, {})
+    return cfg
 
 
 @click.group()
@@ -38,7 +44,7 @@ def main() -> None:
 @click.option("--seed", default=None, type=int)
 @click.option("--budget", default=None, type=int)
 def run(data_path: str, config_path: str | None, output_path: str | None, objective: str | None, seed: int | None, budget: int | None) -> None:
-    cfg = _load_config(config_path)
+    cfg = _ensure_config_sections(_load_config(config_path))
 
     if objective is not None:
         cfg["objective"]["name"] = objective
@@ -169,7 +175,7 @@ def report(result_path: str) -> None:
 @click.option("--config", "config_path", default=None, type=click.Path(exists=True))
 def indicators_cmd(config_path: str | None) -> None:
     """List available indicators and parameter ranges (after config filters)."""
-    cfg = _load_config(config_path)
+    cfg = _ensure_config_sections(_load_config(config_path))
     ind_cfg = cfg.get("indicators", {})
     active_registry = build_registry_from_config(
         DEFAULT_REGISTRY,
@@ -198,12 +204,16 @@ def validate(policy_path: str, data_path: str) -> None:
 @click.option("--config", "config_path", default=None, type=click.Path(exists=True))
 @click.option("--output", "output_path", default="./results/ensemble", type=click.Path())
 def sweep(data_path: str, seeds: tuple[int, ...], objective: str, config_path: str | None, output_path: str) -> None:
+    output_root = Path(output_path)
+    output_root.mkdir(parents=True, exist_ok=True)
+
     for s in seeds:
+        seed_output_path = str(output_root / f"seed_{s}")
         run.main(
-            args=["--data", data_path, "--objective", objective, "--seed", str(s), "--config", config_path] if config_path else ["--data", data_path, "--objective", objective, "--seed", str(s)],
+            args=["--data", data_path, "--objective", objective, "--seed", str(s), "--output", seed_output_path, "--config", config_path] if config_path else ["--data", data_path, "--objective", objective, "--seed", str(s), "--output", seed_output_path],
             standalone_mode=False,
         )
-    click.echo(f"Sweep complete. Results under: {output_path}")
+    click.echo(f"Sweep complete. Results under: {output_root}")
 
 
 if __name__ == "__main__":

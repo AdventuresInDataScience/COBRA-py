@@ -37,7 +37,13 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
         root = Path(__file__).resolve().parents[1]
         config_path = root / "configs" / "default.yaml"
     with Path(config_path).open("r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        return yaml.safe_load(f) or {}
+
+
+def _ensure_config_sections(cfg: dict[str, Any]) -> dict[str, Any]:
+    for section in ("data", "indicators", "policy", "backtest", "objective", "optimiser", "validation", "output"):
+        cfg.setdefault(section, {})
+    return cfg
 
 
 def _normalize_name(name: Any) -> str:
@@ -155,7 +161,9 @@ def run_optimiser(
     evaluate_oos: bool = False,
 ) -> dict[str, Any]:
     cfg = deepcopy(config) if config is not None else load_config(config_path)
+    cfg = _ensure_config_sections(cfg)
     cfg = deep_update(cfg, overrides or {})
+    cfg = _ensure_config_sections(cfg)
     if output_path is not None:
         cfg.setdefault("output", {})["path"] = str(output_path)
 

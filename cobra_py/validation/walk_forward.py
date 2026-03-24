@@ -20,6 +20,10 @@ class WalkForwardResult:
     oos_return_mean: float
     oos_max_drawdown_mean: float
     best_policies_per_fold: list
+    n_requested_folds: int
+    n_completed_folds: int
+    n_skipped_folds: int
+    skipped_folds: list[dict]
 
 
 def walk_forward_validate(
@@ -30,22 +34,31 @@ def walk_forward_validate(
     train_pct: float,
     registry=None,
 ) -> WalkForwardResult:
+    if int(n_splits) < 1:
+        raise ValueError("n_splits must be >= 1")
+    train_pct_f = float(train_pct)
+    if not 0.05 <= train_pct_f <= 0.95:
+        raise ValueError("train_pct must be in [0.05, 0.95]")
+
     n = len(data)
     fold_size = n // n_splits
     folds = []
     policies = []
+    skipped: list[dict] = []
 
     for i in range(n_splits):
         start = i * fold_size
         end = n if i == n_splits - 1 else (i + 1) * fold_size
         fold = data.iloc[start:end]
         if len(fold) < 20:
+            skipped.append({"fold": i, "reason": "fold_too_small", "rows": int(len(fold))})
             continue
 
-        split_idx = int(len(fold) * train_pct)
+        split_idx = int(len(fold) * train_pct_f)
         train = fold.iloc[:split_idx]
         test = fold.iloc[split_idx:]
         if train.empty or test.empty:
+            skipped.append({"fold": i, "reason": "empty_train_or_test", "rows": int(len(fold)), "split_idx": int(split_idx)})
             continue
 
         result = optimise_fn(train, config)
@@ -55,6 +68,12 @@ def walk_forward_validate(
 
         folds.append({"fold": i, "metrics": test_metrics, "best_score": result.best_score})
         policies.append(result.best_policy)
+
+    if not folds:
+        raise ValueError(
+            f"Walk-forward produced zero valid folds (requested={n_splits}, skipped={len(skipped)}). "
+            "Adjust n_splits/train_pct or provide more data."
+        )
 
     sharpe = [f["metrics"].get("sharpe_ratio", -999.0) for f in folds]
     calmar = [f["metrics"].get("calmar_ratio", -999.0) for f in folds]
@@ -69,5 +88,9 @@ def walk_forward_validate(
         oos_return_mean=float(np.mean(ret)) if ret else -999.0,
         oos_max_drawdown_mean=float(np.mean(dd)) if dd else -999.0,
         best_policies_per_fold=policies,
+        n_requested_folds=int(n_splits),
+        n_completed_folds=int(len(folds)),
+        n_skipped_folds=int(len(skipped)),
+        skipped_folds=skipped,
     )
 

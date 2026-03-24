@@ -68,8 +68,8 @@ def generate_report(result: OptimisationResult, wf_result: WalkForwardResult | N
     if metric_key and metric_key in result.best_metrics:
         best_metric_value = float(result.best_metrics[metric_key])
     else:
-        # Fallback: keep a useful human-readable value even for unsupported custom objectives.
-        best_metric_value = float("nan")
+        # Keep JSON standards-compliant for unknown/custom objectives.
+        best_metric_value = None
 
     payload = {
         "summary": {

@@ -21,6 +21,15 @@ def _bars_per_year(freq: str) -> float:
     return 252.0
 
 
+def _validate_risk_levels(levels: np.ndarray, expected_len: int, label: str, level_type: str) -> None:
+    if len(levels) != expected_len:
+        raise ValueError(f"{label} returned length {len(levels)}, expected {expected_len}")
+    if np.all(~np.isfinite(levels)):
+        raise ValueError(
+            f"{label} produced all-NaN levels. Ensure required indicators are precomputed for {level_type}."
+        )
+
+
 def _simulate_single_position(
     close: np.ndarray,
     high: np.ndarray,
@@ -140,6 +149,8 @@ def run_backtest(policy: Policy, cache: IndicatorCache, data: pd.DataFrame, conf
 
     sl_levels = compute_sl(policy.sl_config, cache, close, high, low)
     tp_levels = compute_tp(policy.tp_config, cache, close, high, sl_levels)
+    _validate_risk_levels(sl_levels, len(close), "compute_sl", policy.sl_config.sl_type)
+    _validate_risk_levels(tp_levels, len(close), "compute_tp", policy.tp_config.tp_type)
 
     raw = _simulate_single_position(
         close=close,

@@ -1,4 +1,6 @@
-﻿from cobra_py.objective.function import compute_objective
+﻿import pytest
+
+from cobra_py.objective.function import compute_objective
 from cobra_py.policy.schema import Policy, RuleConfig, SLConfig, TPConfig
 
 
@@ -38,4 +40,16 @@ def test_max_return_dd_cap_penalises_drawdown_breach():
     violating = {"total_return": 0.60, "max_drawdown": -0.35, "n_trades": 20}
     cfg = {"objective": "max_return_dd_cap", "max_drawdown_cap": 0.20}
     assert compute_objective(violating, POLICY_SMALL, cfg) > compute_objective(feasible, POLICY_SMALL, cfg)
+
+
+def test_composite_weights_must_have_exactly_four_values():
+    metrics = {"sharpe_ratio": 1.0, "calmar_ratio": 1.0, "total_return": 0.1, "max_drawdown": -0.1, "n_trades": 20}
+    with pytest.raises(ValueError, match="exactly 4"):
+        compute_objective(metrics, POLICY_SMALL, {"objective": "composite", "composite_weights": [0.6, 0.4, 0.2]})
+
+
+def test_composite_weights_must_be_finite():
+    metrics = {"sharpe_ratio": 1.0, "calmar_ratio": 1.0, "total_return": 0.1, "max_drawdown": -0.1, "n_trades": 20}
+    with pytest.raises(ValueError, match="finite"):
+        compute_objective(metrics, POLICY_SMALL, {"objective": "composite", "composite_weights": [0.6, 0.4, float("nan"), 0.1]})
 

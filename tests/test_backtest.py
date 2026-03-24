@@ -1,9 +1,12 @@
 ﻿import numpy as np
+import pytest
 
 from cobra_py.backtest.engine import run_backtest
 from cobra_py.backtest.engine import _simulate_single_position
 from cobra_py.backtest.metrics import SENTINEL_BAD, extract_metrics
 from cobra_py.objective.function import compute_objective
+from cobra_py.policy.schema import Policy, RuleConfig, SLConfig, TPConfig
+from cobra_py.policy.sl_tp import compute_sl
 
 
 def test_backtest_returns_expected_keys(sample_ohlcv_data, small_cache, simple_policy):
@@ -142,4 +145,37 @@ def test_sortino_uses_stable_guard_when_no_downside_deviation():
 
     metrics = extract_metrics(results, freq="1D", risk_free_rate_annual=0.0)
     assert metrics["sortino_ratio"] == SENTINEL_BAD
+
+
+def test_compute_sl_rejects_wrong_param_shape(small_cache):
+    with pytest.raises(ValueError, match="expects 2 parameter"):
+        compute_sl(
+            SLConfig(sl_type="atr_mult", params=(2.0,)),
+            small_cache,
+            np.array([100.0, 101.0], dtype=float),
+            np.array([101.0, 102.0], dtype=float),
+            np.array([99.0, 100.0], dtype=float),
+        )
+
+
+def test_run_backtest_fails_when_sl_levels_are_all_nan(sample_ohlcv_data, small_cache):
+    rule = RuleConfig(
+        archetype="comparison",
+        indicator="sma",
+        params=(20,),
+        output="ma",
+        operator=">",
+        comparand="price",
+    )
+    policy = Policy(
+        entry_rules=(rule,),
+        exit_rules=(),
+        sl_config=SLConfig(sl_type="atr_mult", params=(2.0, 999)),
+        tp_config=TPConfig(tp_type="pct", params=(0.03,)),
+        n_active_entry=1,
+        n_active_exit=0,
+    )
+
+    with pytest.raises(ValueError, match="all-NaN"):
+        run_backtest(policy, small_cache, sample_ohlcv_data.iloc[:500], {"init_cash": 10000.0})
 

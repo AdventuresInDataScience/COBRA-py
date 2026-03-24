@@ -19,14 +19,21 @@ def _align_len(arr: np.ndarray, target_len: int) -> np.ndarray:
     return out
 
 
+def _require_param_count(params: tuple, expected: int, label: str) -> None:
+    if len(params) != expected:
+        raise ValueError(f"{label} expects {expected} parameter(s), got {len(params)}")
+
+
 def compute_sl(sl_config: SLConfig, cache: IndicatorCache, price: np.ndarray, high: np.ndarray, low: np.ndarray) -> np.ndarray:
     t = sl_config.sl_type
     p = sl_config.params
 
     if t == "pct":
+        _require_param_count(p, 1, "sl_type='pct'")
         pct = float(p[0])
         return price * (1.0 - pct)
     if t == "atr_mult":
+        _require_param_count(p, 2, "sl_type='atr_mult'")
         mult, period = float(p[0]), int(p[1])
         atr = cache.get("atr", (period,), "atr")
         if atr is None:
@@ -34,9 +41,11 @@ def compute_sl(sl_config: SLConfig, cache: IndicatorCache, price: np.ndarray, hi
         atr = _align_len(atr, len(price))
         return price - mult * atr
     if t == "swing_low":
+        _require_param_count(p, 1, "sl_type='swing_low'")
         lookback = int(p[0])
         return pd.Series(low).rolling(lookback).min().to_numpy()
     if t == "bb_lower":
+        _require_param_count(p, 3, "sl_type='bb_lower'")
         period, std, ma_type = int(p[0]), float(p[1]), str(p[2])
         lower = cache.get("bb", (period, std, ma_type), "lower")
         if lower is None:
@@ -44,6 +53,7 @@ def compute_sl(sl_config: SLConfig, cache: IndicatorCache, price: np.ndarray, hi
         lower = _align_len(lower, len(price))
         return lower
     if t == "trailing_atr":
+        _require_param_count(p, 2, "sl_type='trailing_atr'")
         mult, period = float(p[0]), int(p[1])
         atr = cache.get("atr", (period,), "atr")
         if atr is None:
@@ -58,9 +68,11 @@ def compute_tp(tp_config: TPConfig, cache: IndicatorCache, price: np.ndarray, hi
     p = tp_config.params
 
     if t == "pct":
+        _require_param_count(p, 1, "tp_type='pct'")
         pct = float(p[0])
         return price * (1.0 + pct)
     if t == "atr_mult":
+        _require_param_count(p, 2, "tp_type='atr_mult'")
         mult, period = float(p[0]), int(p[1])
         atr = cache.get("atr", (period,), "atr")
         if atr is None:
@@ -68,12 +80,15 @@ def compute_tp(tp_config: TPConfig, cache: IndicatorCache, price: np.ndarray, hi
         atr = _align_len(atr, len(price))
         return price + mult * atr
     if t == "risk_reward":
+        _require_param_count(p, 1, "tp_type='risk_reward'")
         rr = float(p[0])
         return price + rr * (price - sl_levels)
     if t == "swing_high":
+        _require_param_count(p, 1, "tp_type='swing_high'")
         lookback = int(p[0])
         return pd.Series(high).rolling(lookback).max().to_numpy()
     if t == "bb_upper":
+        _require_param_count(p, 3, "tp_type='bb_upper'")
         period, std, ma_type = int(p[0]), float(p[1]), str(p[2])
         upper = cache.get("bb", (period, std, ma_type), "upper")
         if upper is None:
