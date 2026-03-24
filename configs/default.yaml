@@ -34,15 +34,28 @@ backtest:
   slippage: 0.0005
   # Gross leverage multiplier for position sizing (1.0 = no leverage).
   leverage: 1.0
+  # Optional learnable leverage search range used by the optimiser.
+  # Supports list or start/stop/step dict.
+  leverage_range:
+    start: 0.5
+    stop: 5.0
+    step: 0.5
   # Annualized borrow cost for leveraged notional beyond equity (0.06 = 6% per year).
-  borrow_cost_rate: 0.00
+  borrow_cost_rate: 0.06
+  # Annualized risk-free rate used for Sharpe/Sortino excess returns (0.02 = 2% per year).
+  risk_free_rate_annual: 0.02
+  # Optional learnable borrow-cost search range.
+  borrow_cost_rate_range:
+    start: 0.00
+    stop: 0.12
+    step: 0.01
   freq: '1D'
 
 objective:
   # Options: sharpe, calmar, sortino, ulcer, max_return, max_return_dd_cap, composite.
   name: 'sharpe'
   # Used only when name: max_return_dd_cap (0.20 = max 20% drawdown).
-  max_drawdown_cap: 0.20
+  max_drawdown_cap: 0.10
   # Used only when name: composite.
   # score = -(w0*sharpe + w1*calmar + w2*total_return - w3*abs(max_drawdown)).
   composite_weights: [0.5, 0.3, 0.1, 0.1]
@@ -54,10 +67,29 @@ objective:
 optimiser:
   # Options: dehb, nevergrad, tpe.
   name: 'dehb'
+  # DEHB backend selection:
+  # - auto: prefer native DEHB package if installed, else fallback to internal seed-DE surrogate.
+  # - native: require DEHB package (`pip install DEHB`) and fail fast if unavailable.
+  # - seed_de: always use internal surrogate backend (no DEHB dependency needed).
+  # Typical usage:
+  #   name: dehb
+  #   dehb_backend: auto
+  # To force true DEHB package path:
+  #   name: dehb
+  #   dehb_backend: native
+  dehb_backend: 'auto'
+  # Nevergrad optimizer class name, used when name: nevergrad.
+  # Example: NGOpt, OnePlusOne, CMA, PSO.
+  # Only used when name: nevergrad.
+  nevergrad_algorithm: 'NGOpt'
+  # Optimization budget as number of objective evaluations.
   budget: 10000
   seed: 42
+  # Fidelity controls used by native DEHB backend.
+  # These act as train-data fractions during low/high-fidelity evaluations.
   min_fidelity: 0.2
   max_fidelity: 1.0
+  # Native DEHB worker count. Ignored by seed_de backend.
   n_workers: 1
 
 validation:

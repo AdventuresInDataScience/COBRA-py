@@ -1,0 +1,217 @@
+2026-03-24T19:37:33.731891+0000 WARNING The run parameters 'verbose' is deprecated since the changes in v0.1.2. Please use the 'log_level' parameter when initializing DEHB.
+2026-03-24T19:37:33.731891+0000 ERROR An error has been caught in function '_run_native_dehb_backend', process 'MainProcess' (16368), thread 'MainThread' (4520):
+Traceback (most recent call last):
+
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pytest\__main__.py", line 9, in <module>
+    raise SystemExit(pytest.console_main())
+                     │      └ <function console_main at 0x000001A3259F6F20>
+                     └ <module 'pytest' from 'C:\\Users\\malha\\Documents\\Projects\\COBRA-py\\.venv\\Lib\\site-packages\\pytest\\__init__.py'>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\config\__init__.py", line 223, in console_main
+    code = main()
+           └ <function main at 0x000001A3259F6E80>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\config\__init__.py", line 199, in main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+         │                │      │    │                          └ <_pytest.config.Config object at 0x000001A325382350>
+         │                │      │    └ <HookCaller 'pytest_cmdline_main'>
+         │                │      └ <_pytest.config.compat.PathAwareHookProxy object at 0x000001A325D08D10>
+         │                └ <_pytest.config.Config object at 0x000001A325382350>
+         └ <enum 'ExitCode'>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'config': <_pytest.config.Config object at 0x000001A325382350>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_cmdline_main'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_cmdline_main'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_cmdline_main'>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'config': <_pytest.config.Config object at 0x000001A325382350>}
+           │    │               │          └ [<HookImpl plugin_name='main', plugin=<module '_pytest.main' from 'C:\\Users\\malha\\Documents\\Projects\\COBRA-py\\.venv\\Li...
+           │    │               └ 'pytest_cmdline_main'
+           │    └ <function _multicall at 0x000001A3251B8C20>
+           └ <_pytest.config.PytestPluginManager object at 0x000001A325019B90>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<_pytest.config.Config object at 0x000001A325382350>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='main', plugin=<module '_pytest.main' from 'C:\\Users\\malha\\Documents\\Projects\\COBRA-py\\.venv\\Lib...
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\main.py", line 365, in pytest_cmdline_main
+    return wrap_session(config, _main)
+           │            │       └ <function _main at 0x000001A325ACDA80>
+           │            └ <_pytest.config.Config object at 0x000001A325382350>
+           └ <function wrap_session at 0x000001A325ACD940>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\main.py", line 318, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+    │       │            │    │       └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=34>
+    │       │            │    └ <_pytest.config.Config object at 0x000001A325382350>
+    │       │            └ <function _main at 0x000001A325ACDA80>
+    │       └ <ExitCode.OK: 0>
+    └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=34>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\main.py", line 372, in _main
+    config.hook.pytest_runtestloop(session=session)
+    │      │    │                          └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=34>
+    │      │    └ <HookCaller 'pytest_runtestloop'>
+    │      └ <_pytest.config.compat.PathAwareHookProxy object at 0x000001A325D08D10>
+    └ <_pytest.config.Config object at 0x000001A325382350>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'session': <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=34>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtestloop'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtestloop'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtestloop'>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'session': <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=34>}
+           │    │               │          └ [<HookImpl plugin_name='main', plugin=<module '_pytest.main' from 'C:\\Users\\malha\\Documents\\Projects\\COBRA-py\\.venv\\Li...
+           │    │               └ 'pytest_runtestloop'
+           │    └ <function _multicall at 0x000001A3251B8C20>
+           └ <_pytest.config.PytestPluginManager object at 0x000001A325019B90>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=34>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='main', plugin=<module '_pytest.main' from 'C:\\Users\\malha\\Documents\\Projects\\COBRA-py\\.venv\\Lib...
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\main.py", line 396, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+    │    │                                        │              └ <Function test_list_available_optimisers_contains_expected_options>
+    │    │                                        └ <Function test_dehb_auto_backend_returns_result>
+    │    └ <member 'config' of 'Node' objects>
+    └ <Function test_dehb_auto_backend_returns_result>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'item': <Function test_dehb_auto_backend_returns_result>, 'nextitem': <Function test_list_available_optimisers_contains_expe...
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtest_protocol'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtest_protocol'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtest_protocol'>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'item': <Function test_dehb_auto_backend_returns_result>, 'nextitem': <Function test_list_available_optimisers_contains_expe...
+           │    │               │          └ [<HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from 'C:\\Users\\malha\\Documents\\Projects\\COBRA-py\\.venv...
+           │    │               └ 'pytest_runtest_protocol'
+           │    └ <function _multicall at 0x000001A3251B8C20>
+           └ <_pytest.config.PytestPluginManager object at 0x000001A325019B90>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_dehb_auto_backend_returns_result>, <Function test_list_available_optimisers_contains_expected_options>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from 'C:\\Users\\malha\\Documents\\Projects\\COBRA-py\\.venv\...
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\runner.py", line 118, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+    │               │              └ <Function test_list_available_optimisers_contains_expected_options>
+    │               └ <Function test_dehb_auto_backend_returns_result>
+    └ <function runtestprotocol at 0x000001A325ACCB80>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\runner.py", line 137, in runtestprotocol
+    reports.append(call_and_report(item, "call", log))
+    │       │      │               │             └ True
+    │       │      │               └ <Function test_dehb_auto_backend_returns_result>
+    │       │      └ <function call_and_report at 0x000001A325ACCFE0>
+    │       └ <method 'append' of 'list' objects>
+    └ [<TestReport 'tests/test_dehb_runner.py::test_dehb_auto_backend_returns_result' when='setup' outcome='passed'>]
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\runner.py", line 244, in call_and_report
+    call = CallInfo.from_call(
+           │        └ <classmethod(<function CallInfo.from_call at 0x000001A325ACD3A0>)>
+           └ <class '_pytest.runner.CallInfo'>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\runner.py", line 353, in from_call
+    result: TResult | None = func()
+            │                └ <function call_and_report.<locals>.<lambda> at 0x000001A3474DA340>
+            └ +TResult
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\runner.py", line 245, in <lambda>
+    lambda: runtest_hook(item=item, **kwds),
+            │                 │       └ {}
+            │                 └ <Function test_dehb_auto_backend_returns_result>
+            └ <HookCaller 'pytest_runtest_call'>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ False
+           │    │         │    │     │    │                  └ {'item': <Function test_dehb_auto_backend_returns_result>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtest_call'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtest_call'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtest_call'>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ False
+           │    │               │          │        └ {'item': <Function test_dehb_auto_backend_returns_result>}
+           │    │               │          └ [<HookImpl plugin_name='threadexception', plugin=<module '_pytest.threadexception' from 'C:\\Users\\malha\\Documents\\Project...
+           │    │               └ 'pytest_runtest_call'
+           │    └ <function _multicall at 0x000001A3251B8C20>
+           └ <_pytest.config.PytestPluginManager object at 0x000001A325019B90>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_dehb_auto_backend_returns_result>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from 'C:\\Users\\malha\\Documents\\Projects\\COBRA-py\\.venv\...
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\runner.py", line 179, in pytest_runtest_call
+    item.runtest()
+    │    └ <function Function.runtest at 0x000001A325BF2980>
+    └ <Function test_dehb_auto_backend_returns_result>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\python.py", line 1720, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    │    │                                   └ <Function test_dehb_auto_backend_returns_result>
+    │    └ <property object at 0x000001A325A88310>
+    └ <Function test_dehb_auto_backend_returns_result>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'pyfuncitem': <Function test_dehb_auto_backend_returns_result>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_pyfunc_call'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_pyfunc_call'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_pyfunc_call'>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'pyfuncitem': <Function test_dehb_auto_backend_returns_result>}
+           │    │               │          └ [<HookImpl plugin_name='python', plugin=<module '_pytest.python' from 'C:\\Users\\malha\\Documents\\Projects\\COBRA-py\\.venv...
+           │    │               └ 'pytest_pyfunc_call'
+           │    └ <function _multicall at 0x000001A3251B8C20>
+           └ <_pytest.config.PytestPluginManager object at 0x000001A325019B90>
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_dehb_auto_backend_returns_result>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='python', plugin=<module '_pytest.python' from 'C:\\Users\\malha\\Documents\\Projects\\COBRA-py\\.venv\...
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\_pytest\python.py", line 166, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+             │              └ {'sample_ohlcv_data':                   open        high         low       close  volume
+             │                2010-01-01  102.271726  103.152255  ...
+             └ <function test_dehb_auto_backend_returns_result at 0x000001A3474D9DA0>
+
+  File "C:\Users\malha\Documents\Projects\COBRA-py\tests\test_dehb_runner.py", line 26, in test_dehb_auto_backend_returns_result
+    result = run_dehb(
+             └ <function run_dehb at 0x000001A34749C680>
+
+  File "C:\Users\malha\Documents\Projects\COBRA-py\cobra_py\search\dehb_runner.py", line 321, in run_dehb
+    return _run_native_dehb_backend(
+           └ <function _run_native_dehb_backend at 0x000001A34749C5E0>
+
+> File "C:\Users\malha\Documents\Projects\COBRA-py\cobra_py\search\dehb_runner.py", line 269, in _run_native_dehb_backend
+    optimiser.run(**kwargs)
+    │         │     └ {'fevals': 8, 'verbose': False}
+    │         └ <function DEHB.run at 0x000001A3A92699E0>
+    └ <dehb.optimizers.dehb.DEHB object at 0x000001A347560F10>
+
+  File "C:\Users\malha\Documents\Projects\COBRA-py\.venv\Lib\site-packages\dehb\optimizers\dehb.py", line 1094, in run
+    raise TypeError("Used deprecated parameter 'verbose'. "\
+
+TypeError: Used deprecated parameter 'verbose'. Please check the logs for more information.

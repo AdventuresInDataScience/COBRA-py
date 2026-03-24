@@ -159,6 +159,7 @@ for scenario in scenarios:
         overrides=scenario["overrides"],
         output_path=out_dir,
         run_walk_forward=False,
+        evaluate_oos=True,
     )
     named_reports[scenario["name"]] = out["report"]
 
@@ -179,6 +180,7 @@ for scenario in scenarios:
 
     strategy_perf = compute_perf(strategy_eq)
     bh_perf = compute_perf(buyhold_eq)
+    oos = out.get("oos_metrics") or {}
 
     run_curves[scenario["name"]] = {
         "index": out["train"].index,
@@ -199,6 +201,9 @@ for scenario in scenarios:
             "strategy_sharpe": strategy_perf["sharpe"],
             "buyhold_total_return": bh_perf["total_return"],
             "buyhold_sharpe": bh_perf["sharpe"],
+            "oos_total_return": oos.get("total_return"),
+            "oos_sharpe": oos.get("sharpe_ratio"),
+            "oos_max_drawdown": oos.get("max_drawdown"),
         }
     )
 

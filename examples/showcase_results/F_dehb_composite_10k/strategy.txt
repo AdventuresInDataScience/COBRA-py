@@ -1,8 +1,8 @@
 Entry conditions (ALL must be true simultaneously):
-  Rule 1: sma(150,) > price
+  Rule 1: wma(100,) crosses_above 90.99103459657434
 
 Exit conditions:
-  Rule 1: ema(200,) > price
+  Rule 1: atr(14,) crosses_below 78.28147738882002
 
-Stop-loss: atr_mult (3.1027426143457615, 7)
-Take-profit: risk_reward (3.6373019095851475,)
+Stop-loss: bb_lower (20, 2.0, 'sma')
+Take-profit: bb_upper (20, 2.0, 'sma')

@@ -1,8 +1,8 @@
 Entry conditions (ALL must be true simultaneously):
-  Rule 1: bb(30, 2.5, 'ema') < price
+  Rule 1: macd(12, 24, 12) > price
 
 Exit conditions:
-  Rule 1: sma(75,) > 12.828566328376134
+  Rule 1: bb(20, 2.5, 'ema') crosses_below 54.84803041401366
 
 Stop-loss: bb_lower (20, 2.0, 'sma')
-Take-profit: pct (0.08151431344502254,)
+Take-profit: atr_mult (4.562575840917856, 10)

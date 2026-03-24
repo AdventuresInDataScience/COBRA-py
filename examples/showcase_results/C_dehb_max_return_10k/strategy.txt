@@ -1,9 +1,8 @@
 Entry conditions (ALL must be true simultaneously):
-  Rule 1: bb(20, 1.5, 'sma') crosses_below 29.03917021963268
-  Rule 2: wma(50,) crosses_below price
+  Rule 1: macd(8, 30, 12) crosses_below price
 
 Exit conditions:
   (none - exits driven by stop-loss and take-profit only)
 
-Stop-loss: pct (0.0840222399961382,)
-Take-profit: risk_reward (2.7593344800000144,)
+Stop-loss: bb_lower (20, 2.0, 'sma')
+Take-profit: pct (0.06475215879107907,)

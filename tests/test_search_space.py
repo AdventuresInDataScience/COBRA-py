@@ -29,6 +29,23 @@ def test_registry_filter_and_param_override():
     assert rsi.param_grid["period"] == [14, 21]
 
 
+def test_registry_param_range_shorthand():
+    reg = build_registry_from_config(
+        DEFAULT_REGISTRY,
+        include=["bb"],
+        param_ranges={
+            "bb": {
+                "period": {"start": 10, "stop": 20, "step": 5},
+                "std": {"range": [1.5, 2.5, 0.5]},
+                "ma_type": ["sma", "ema"],
+            }
+        },
+    )
+    bb = reg[0]
+    assert bb.param_grid["period"] == [10, 15, 20]
+    assert bb.param_grid["std"] == [1.5, 2.0, 2.5]
+
+
 def test_space_uses_selected_indicators_and_rule_counts():
     reg = build_registry_from_config(DEFAULT_REGISTRY, include=["rsi"])
     cs = build_config_space(2, 2, reg, seed=42)
@@ -40,4 +57,35 @@ def test_space_uses_selected_indicators_and_rule_counts():
     assert sample["entry_1_indicator"] == "rsi"
     assert sample["exit_0_indicator"] == "rsi"
     assert sample["exit_1_indicator"] == "rsi"
+
+
+def test_space_samples_leverage_from_configured_range():
+    reg = build_registry_from_config(DEFAULT_REGISTRY, include=["rsi"])
+    cs = build_config_space(
+        1,
+        1,
+        reg,
+        seed=42,
+        backtest_config={"leverage_range": {"start": 0.5, "stop": 1.5, "step": 0.5}},
+    )
+    values = {cs.sample_configuration()["leverage"] for _ in range(20)}
+    assert values.issubset({0.5, 1.0, 1.5})
+
+
+def test_space_samples_discrete_stop_and_target_percentages():
+    reg = build_registry_from_config(DEFAULT_REGISTRY, include=["rsi"])
+    cs = build_config_space(1, 1, reg, seed=7)
+    sample = cs.sample_configuration()
+
+    assert abs(sample["sl_pct"] * 1000 - round(sample["sl_pct"] * 1000)) < 1e-9
+    assert abs(sample["tp_pct"] * 1000 - round(sample["tp_pct"] * 1000)) < 1e-9
+
+
+def test_space_uses_indicator_aware_comparand_logic():
+    reg = build_registry_from_config(DEFAULT_REGISTRY, include=["sma"])
+    cs = build_config_space(1, 1, reg, seed=42)
+    sample = cs.sample_configuration()
+
+    assert sample["entry_0_indicator"] == "sma"
+    assert sample["entry_0_comparand"] == "price"
 

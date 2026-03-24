@@ -59,6 +59,14 @@ summary = summarise_reports({
 print(summary[["run", "objective", "best_metric_name", "best_metric_value", "best_score"]])
 
 plot_equity_curves({"dehb": run_a["report"], "tpe": run_b["report"]}, save_path="equity_curves.png")
+
+# Interactive Plotly chart (legend toggle, zoom, range slider)
+fig = plot_equity_curves(
+	{"dehb": run_a["report"], "tpe": run_b["report"]},
+	backend="plotly",
+	save_path="equity_curves.html",
+)
+fig.show()
 ```
 
 ## Repository Structure
@@ -104,6 +112,17 @@ Main config file: [configs/default.yaml](configs/default.yaml).
 - `indicators.include`: optional whitelist of indicator names.
 - `indicators.exclude`: optional blacklist applied after include.
 - `indicators.param_ranges`: optional parameter overrides per indicator.
+- `indicators.param_ranges` supports either explicit lists or range shorthand:
+
+```yaml
+indicators:
+	param_ranges:
+		bb:
+			period: {start: 10, stop: 200, step: 5}
+			std: {range: [1.5, 3.0, 0.5]}
+			ma_type: ["sma", "ema"]
+```
+
 - `indicators.n_jobs`: parallel workers for indicator precompute (`-1` means all cores).
 
 - `policy.n_entry_rules`: number of entry rule slots sampled.
@@ -114,6 +133,8 @@ Main config file: [configs/default.yaml](configs/default.yaml).
 - `backtest.slippage`: decimal execution slippage (`0.0005` = 0.05%).
 - `backtest.leverage`: gross leverage multiplier (`1.0` = unlevered).
 - `backtest.borrow_cost_rate`: annualized borrow rate applied to leveraged notional above equity (`0.06` = 6%/year).
+- `backtest.leverage_range`: optimiser search range for learned leverage values.
+- `backtest.borrow_cost_rate_range`: optimiser search range for learned financing costs.
 
 - `objective.name`: one of `sharpe`, `calmar`, `sortino`, `ulcer`, `max_return`, `max_return_dd_cap`, `composite`.
 - `objective.max_drawdown_cap`: used by `max_return_dd_cap` as a hard max drawdown limit.
@@ -129,20 +150,61 @@ $$
 - `optimiser.name`: one of `dehb`, `nevergrad`, `tpe`.
 - `optimiser.budget`: number of sampled configurations.
 - `optimiser.seed`: random seed for reproducibility.
+- `optimiser.dehb_backend`: DEHB backend selector (`auto`, `native`, `seed_de`).
+- `optimiser.min_fidelity`: lower fidelity used by native DEHB (fraction of train bars).
+- `optimiser.max_fidelity`: upper fidelity used by native DEHB.
+- `optimiser.n_workers`: DEHB parallel workers (native backend only).
+- `optimiser.nevergrad_algorithm`: algorithm class used by Nevergrad (`NGOpt`, `OnePlusOne`, `CMA`, ...).
 
 ## Optimiser Options
 
-- `dehb`: default optimiser mode.
-- `nevergrad`: alternate optimiser entrypoint.
-- `tpe`: TPE entrypoint.
+- `dehb`:
+	- `dehb_backend: auto`: use true DEHB package when available, otherwise fallback to internal seed-DE surrogate.
+	- `dehb_backend: native`: force true DEHB package path and fail if package is missing.
+	- `dehb_backend: seed_de`: force internal surrogate backend.
+- `nevergrad`: Nevergrad runner with configurable algorithm class from `optimiser.nevergrad_algorithm`.
+- `tpe`: Optuna TPE runner.
 
-In this MVP, these options currently share the same lightweight search backend and differ mainly by configuration intent and run labeling in reports.
+Example config snippets:
+
+```yaml
+optimiser:
+	name: dehb
+	dehb_backend: auto
+	budget: 10000
+	min_fidelity: 0.2
+	max_fidelity: 1.0
+	n_workers: 1
+```
+
+```yaml
+optimiser:
+	name: dehb
+	dehb_backend: native
+	budget: 10000
+	min_fidelity: 0.2
+	max_fidelity: 1.0
+	n_workers: 4
+```
+
+For `nevergrad` and `tpe`, install optional optimizer dependencies:
+
+```bash
+uv pip install -e .[optim]
+```
+
+For interactive Plotly charting in helper scripts:
+
+```bash
+uv pip install plotly
+```
 
 ## Interpreting Scores
 
 - Internal optimisation minimizes `best_score`.
 - For non-composite objectives, this is mostly negative of your chosen metric plus complexity penalty.
 - Reports also provide human-readable fields: `best_metric_name` and `best_metric_value`.
+- Example scripts now print the final interpreted strategy text and include explicit out-of-sample metric output.
 
 ## Why Demo Runs Are Fast
 

@@ -1,7 +1,9 @@
 import pandas as pd
+import pytest
 
 from cobra_py.helpers import _extract_ohlcv_from_yfinance
 from cobra_py.helpers import list_available_objectives, list_available_optimisers, summarise_reports
+from cobra_py.helpers import plot_equity_curves
 
 
 def test_list_available_optimisers_contains_expected_options():
@@ -64,3 +66,8 @@ def test_extract_ohlcv_from_yfinance_prefers_close_over_adj_close() -> None:
 
     assert list(out.columns) == ["open", "high", "low", "close", "volume"]
     assert out["close"].tolist() == [11.0, 12.0, 13.0]
+
+
+def test_plot_equity_curves_rejects_unknown_backend():
+    with pytest.raises(ValueError, match="backend"):
+        plot_equity_curves({}, backend="unknown")

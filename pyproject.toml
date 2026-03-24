@@ -18,6 +18,7 @@ optim = [
     "ConfigSpace>=0.7",
     "DEHB>=0.0.6",
     "nevergrad>=1.0",
+    "optuna>=3.6",
 ]
 
 [build-system]

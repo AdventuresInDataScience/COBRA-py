@@ -203,6 +203,43 @@ def make_default_registry() -> list[IndicatorDef]:
 DEFAULT_REGISTRY = make_default_registry()
 
 
+def _expand_range_spec(value: Any) -> list[Any]:
+    if isinstance(value, dict):
+        if "values" in value:
+            return list(value["values"])
+        if "range" in value:
+            seq = list(value["range"])
+            if len(seq) != 3:
+                raise ValueError("Range spec must be [start, stop, step]")
+            start, stop, step = seq
+        elif {"start", "stop", "step"}.issubset(value.keys()):
+            start = value["start"]
+            stop = value["stop"]
+            step = value["step"]
+        else:
+            raise ValueError("Range dict must contain either 'values', 'range', or start/stop/step")
+
+        start_f = float(start)
+        stop_f = float(stop)
+        step_f = float(step)
+        if step_f <= 0:
+            raise ValueError("Range step must be > 0")
+        out: list[Any] = []
+        cur = start_f
+        while cur <= stop_f + 1e-12:
+            if float(start).is_integer() and float(stop).is_integer() and float(step).is_integer():
+                out.append(int(round(cur)))
+            else:
+                out.append(round(cur, 10))
+            cur += step_f
+        return out
+
+    if isinstance(value, list):
+        return list(value)
+
+    raise ValueError("Parameter range override must be a list or range dict")
+
+
 def build_registry_from_config(
     base_registry: list[IndicatorDef],
     include: list[str] | None = None,
@@ -230,7 +267,7 @@ def build_registry_from_config(
             if key not in override_grid:
                 new_grid[key] = values
                 continue
-            custom_values = list(override_grid[key])
+            custom_values = _expand_range_spec(override_grid[key])
             if not custom_values:
                 raise ValueError(f"param_ranges for '{ind.name}.{key}' cannot be empty")
             new_grid[key] = custom_values

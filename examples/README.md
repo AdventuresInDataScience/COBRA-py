@@ -17,6 +17,7 @@ This folder contains block-runnable `#%%` scripts that work like notebooks in VS
   - leverage and borrow-cost sensitivity run
   - indicator subset/range filtering example
   - strategy printout text for interpretability
+  - explicit out-of-sample metric columns per scenario
   - buy-and-hold baseline in comparison charts
   - plots and CSV exports
   - helper-API-first workflow patterns
@@ -27,7 +28,7 @@ From project root:
 
 ```bash
 uv pip install -e .
-uv pip install yfinance ipython jupyter matplotlib
+uv pip install yfinance ipython jupyter matplotlib plotly
 ```
 
 ## How To Run
@@ -46,6 +47,11 @@ uv run python examples/spy_showcase.py
 ## What Gets Saved
 
 `spy_demo.py` writes to `examples/results_api_demo/` including per-run reports, effective configs, `summary.csv`, and `equity_curves.png`.
+
+`spy_demo.py` also prints:
+
+- the exact strategy logic found by each run
+- out-of-sample metrics for that strategy on the held-out split
 
 `spy_showcase.py` writes to `examples/showcase_results/` including:
 

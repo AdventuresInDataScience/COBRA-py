@@ -2,6 +2,7 @@
 
 from cobra_py.backtest.engine import run_backtest
 from cobra_py.backtest.engine import _simulate_single_position
+from cobra_py.backtest.metrics import SENTINEL_BAD, extract_metrics
 from cobra_py.objective.function import compute_objective
 
 
@@ -101,4 +102,44 @@ def test_borrow_cost_reduces_leveraged_equity():
     )
 
     assert high_cost["equity_curve"][-1] < low_cost["equity_curve"][-1]
+
+
+def test_in_position_equity_is_net_of_borrowed_principal():
+    close = np.array([100.0, 100.0, 100.0])
+    high = close.copy()
+    low = close.copy()
+    entries = np.array([True, False, False])
+    exits = np.array([False, False, False])
+    sl = np.array([np.nan, np.nan, np.nan])
+    tp = np.array([np.nan, np.nan, np.nan])
+
+    out = _simulate_single_position(
+        close=close,
+        high=high,
+        low=low,
+        entries=entries,
+        exits=exits,
+        sl_levels=sl,
+        tp_levels=tp,
+        init_cash=10000.0,
+        fee_rate=0.0,
+        slippage=0.0,
+        leverage=2.0,
+        borrow_cost_rate=0.0,
+        freq="1D",
+    )
+
+    # Net liquidation value should remain at starting equity for a flat market.
+    assert out["equity_curve"][0] == 10000.0
+
+
+def test_sortino_uses_stable_guard_when_no_downside_deviation():
+    results = {
+        "equity_curve": np.array([100.0, 101.0, 102.0, 103.0], dtype=float),
+        "trade_returns": np.array([], dtype=float),
+        "n_trades": 0,
+    }
+
+    metrics = extract_metrics(results, freq="1D", risk_free_rate_annual=0.0)
+    assert metrics["sortino_ratio"] == SENTINEL_BAD
 

@@ -28,6 +28,7 @@ def walk_forward_validate(
     config: dict[str, Any],
     n_splits: int,
     train_pct: float,
+    registry=None,
 ) -> WalkForwardResult:
     n = len(data)
     fold_size = n // n_splits
@@ -48,7 +49,8 @@ def walk_forward_validate(
             continue
 
         result = optimise_fn(train, config)
-        cache_test = precompute_all(test, DEFAULT_REGISTRY, n_jobs=1)
+        cache_registry = registry if registry is not None else DEFAULT_REGISTRY
+        cache_test = precompute_all(test, cache_registry, n_jobs=1)
         test_metrics = run_backtest(result.best_policy, cache_test, test, config.get("backtest", {}))
 
         folds.append({"fold": i, "metrics": test_metrics, "best_score": result.best_score})

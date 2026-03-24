@@ -11,6 +11,7 @@ import yaml
 
 from cobra_py.data.loader import load_ohlcv
 from cobra_py.data.preprocessor import preprocess
+from cobra_py.backtest.engine import run_backtest
 from cobra_py.indicators.precompute import precompute_all
 from cobra_py.indicators.registry import DEFAULT_REGISTRY, build_registry_from_config
 from cobra_py.reporting.report import generate_report
@@ -137,7 +138,8 @@ def _run_with_optimiser(name: str, **kwargs):
     if key == "dehb":
         return run_dehb(**kwargs)
     if key == "nevergrad":
-        return run_nevergrad(**kwargs)
+        ng_algo = kwargs.pop("nevergrad_algorithm", "NGOpt")
+        return run_nevergrad(**kwargs, optimiser_name=str(ng_algo))
     if key == "tpe":
         return run_tpe(**kwargs)
     raise ValueError(f"Unknown optimiser '{name}'. Available: {list_available_optimisers()}")
@@ -150,6 +152,7 @@ def run_optimiser(
     overrides: dict[str, Any] | None = None,
     output_path: str | Path | None = None,
     run_walk_forward: bool = False,
+    evaluate_oos: bool = False,
 ) -> dict[str, Any]:
     cfg = deepcopy(config) if config is not None else load_config(config_path)
     cfg = deep_update(cfg, overrides or {})
@@ -170,6 +173,7 @@ def run_optimiser(
         n_exit_rules=int(cfg["policy"].get("n_exit_rules", 1)),
         registry=registry,
         seed=int(cfg["optimiser"].get("seed", 42)),
+        backtest_config=cfg["backtest"],
     )
 
     result = _run_with_optimiser(
@@ -181,9 +185,19 @@ def run_optimiser(
         backtest_config=cfg["backtest"],
         budget=int(cfg["optimiser"].get("budget", 200)),
         seed=int(cfg["optimiser"].get("seed", 42)),
+        dehb_backend=cfg["optimiser"].get("dehb_backend", "auto"),
+        min_fidelity=float(cfg["optimiser"].get("min_fidelity", 0.2)),
+        max_fidelity=float(cfg["optimiser"].get("max_fidelity", 1.0)),
+        n_workers=int(cfg["optimiser"].get("n_workers", 1)),
+        nevergrad_algorithm=cfg["optimiser"].get("nevergrad_algorithm", "NGOpt"),
     )
 
     wf_result = None
+    oos_metrics = None
+    if evaluate_oos and len(test) > 0:
+        cache_test = precompute_all(test, registry, n_jobs=int(cfg["indicators"].get("n_jobs", -1)))
+        oos_metrics = run_backtest(result.best_policy, cache_test, test, cfg["backtest"])
+
     if run_walk_forward and bool(cfg["validation"].get("walk_forward", True)):
         def optimise_fold(train_df: pd.DataFrame, full_cfg: dict[str, Any]):
             fold_cache = precompute_all(train_df, registry, n_jobs=1)
@@ -192,6 +206,7 @@ def run_optimiser(
                 n_exit_rules=int(full_cfg["policy"].get("n_exit_rules", 1)),
                 registry=registry,
                 seed=int(cfg["optimiser"].get("seed", 42)),
+                backtest_config=cfg["backtest"],
             )
             return _run_with_optimiser(
                 cfg["optimiser"].get("name", "dehb"),
@@ -202,6 +217,11 @@ def run_optimiser(
                 backtest_config=cfg["backtest"],
                 budget=max(20, int(cfg["optimiser"].get("budget", 200)) // 5),
                 seed=int(cfg["optimiser"].get("seed", 42)),
+                dehb_backend=cfg["optimiser"].get("dehb_backend", "auto"),
+                min_fidelity=float(cfg["optimiser"].get("min_fidelity", 0.2)),
+                max_fidelity=float(cfg["optimiser"].get("max_fidelity", 1.0)),
+                n_workers=int(cfg["optimiser"].get("n_workers", 1)),
+                nevergrad_algorithm=cfg["optimiser"].get("nevergrad_algorithm", "NGOpt"),
             )
 
         wf_result = walk_forward_validate(
@@ -210,6 +230,7 @@ def run_optimiser(
             config=cfg,
             n_splits=int(cfg["validation"].get("n_splits", 3)),
             train_pct=float(cfg["validation"].get("train_pct", 0.7)),
+            registry=registry,
         )
 
     payload = generate_report(result, wf_result, cfg["output"].get("path", "./results/"))
@@ -219,6 +240,7 @@ def run_optimiser(
         "test": test,
         "result": result,
         "report": payload,
+        "oos_metrics": oos_metrics,
         "walk_forward": wf_result,
     }
 
@@ -253,27 +275,98 @@ def plot_equity_curves(
     normalize: bool = True,
     title: str = "Strategy Equity Curves",
     save_path: str | Path | None = None,
+    backend: str = "matplotlib",
+    x_index: dict[str, Any] | None = None,
+    show_range_slider: bool = True,
 ):
-    try:
-        import matplotlib.pyplot as plt
-    except ImportError as exc:  # pragma: no cover - optional dependency path
-        raise ImportError("matplotlib is required for plot_equity_curves. Install with `pip install matplotlib`.") from exc
+    backend_key = str(backend).strip().lower()
+    if backend_key not in {"matplotlib", "plotly"}:
+        raise ValueError("backend must be either 'matplotlib' or 'plotly'")
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    if backend_key == "matplotlib":
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError as exc:  # pragma: no cover - optional dependency path
+            raise ImportError("matplotlib is required for plot_equity_curves with backend='matplotlib'. Install with `pip install matplotlib`.") from exc
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        for name, payload in named_reports.items():
+            eq = np.asarray(payload.get("best_metrics", {}).get("equity_curve", []), dtype=float)
+            if len(eq) < 2:
+                continue
+            series = eq / max(eq[0], 1e-12) if normalize else eq
+
+            x_vals = None
+            if x_index and name in x_index:
+                candidate = np.asarray(x_index[name])
+                if len(candidate) == len(series):
+                    x_vals = pd.to_datetime(candidate, errors="coerce")
+                    if np.any(pd.notna(x_vals)):
+                        ax.plot(x_vals, series, linewidth=1.8, label=name)
+                    else:
+                        ax.plot(series, linewidth=1.8, label=name)
+                else:
+                    ax.plot(series, linewidth=1.8, label=name)
+            else:
+                ax.plot(series, linewidth=1.8, label=name)
+
+        ax.set_title(title)
+        ax.set_xlabel("Date" if x_index else "Bars")
+        ax.set_ylabel("Normalized equity" if normalize else "Equity")
+        ax.grid(alpha=0.25)
+        ax.legend(loc="best")
+        fig.tight_layout()
+
+        if save_path is not None:
+            fig.savefig(Path(save_path), dpi=140)
+        return fig, ax
+
+    try:
+        import plotly.graph_objects as go
+    except ImportError as exc:  # pragma: no cover - optional dependency path
+        raise ImportError("plotly is required for plot_equity_curves with backend='plotly'. Install with `pip install plotly`.") from exc
+
+    fig = go.Figure()
     for name, payload in named_reports.items():
         eq = np.asarray(payload.get("best_metrics", {}).get("equity_curve", []), dtype=float)
         if len(eq) < 2:
             continue
         series = eq / max(eq[0], 1e-12) if normalize else eq
-        ax.plot(series, linewidth=1.8, label=name)
 
-    ax.set_title(title)
-    ax.set_xlabel("Bars")
-    ax.set_ylabel("Normalized equity" if normalize else "Equity")
-    ax.grid(alpha=0.25)
-    ax.legend(loc="best")
-    fig.tight_layout()
+        x_vals: Any = np.arange(len(series))
+        if x_index and name in x_index:
+            candidate = np.asarray(x_index[name])
+            if len(candidate) == len(series):
+                parsed = pd.to_datetime(candidate, errors="coerce")
+                if np.any(pd.notna(parsed)):
+                    x_vals = parsed
+
+        fig.add_trace(
+            go.Scatter(
+                x=x_vals,
+                y=series,
+                mode="lines",
+                name=name,
+            )
+        )
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Date" if x_index else "Bars",
+        yaxis_title="Normalized equity" if normalize else "Equity",
+        hovermode="x unified",
+        legend_title_text="Run",
+    )
+    fig.update_xaxes(rangeslider_visible=bool(show_range_slider))
 
     if save_path is not None:
-        fig.savefig(Path(save_path), dpi=140)
-    return fig, ax
+        output = Path(save_path)
+        if output.suffix.lower() in {".html", ".htm"}:
+            fig.write_html(str(output), include_plotlyjs="cdn")
+        else:
+            try:
+                fig.write_image(str(output))
+            except ValueError as exc:  # pragma: no cover - requires kaleido
+                raise ValueError("Saving Plotly static images requires kaleido. Install with `pip install kaleido`, or save as .html.") from exc
+
+    return fig

@@ -40,6 +40,7 @@ def _simulate_single_position(
     pos_qty = 0.0
     in_pos = False
     entry_price = 0.0
+    trade_entry_equity = 0.0
     borrowed_principal = 0.0
     accrued_borrow = 0.0
     stop = np.nan
@@ -55,6 +56,7 @@ def _simulate_single_position(
         px = float(close[i])
 
         if not in_pos and bool(entries[i]):
+            trade_entry_equity = cash
             fill = px * (1.0 + slippage)
             gross_notional = cash * leverage
             fee = gross_notional * fee_rate
@@ -87,16 +89,19 @@ def _simulate_single_position(
                 gross = pos_qty * exit_px
                 fee = gross * fee_rate
                 cash = gross - fee - borrowed_principal - accrued_borrow
-                trade_returns.append(cash / max(init_cash, 1e-12) - 1.0)
+                cash = max(cash, 0.0)
+                trade_returns.append(cash / max(trade_entry_equity, 1e-12) - 1.0)
                 pos_qty = 0.0
                 in_pos = False
                 entry_price = 0.0
+                trade_entry_equity = 0.0
                 borrowed_principal = 0.0
                 accrued_borrow = 0.0
                 stop = np.nan
                 take = np.nan
 
-        equity = cash if not in_pos else pos_qty * px
+        equity = cash if not in_pos else pos_qty * px - borrowed_principal - accrued_borrow
+        equity = max(float(equity), 0.0)
         equity_curve.append(equity)
 
     if in_pos:
@@ -105,7 +110,8 @@ def _simulate_single_position(
         gross = pos_qty * final_px
         fee = gross * fee_rate
         cash = gross - fee - borrowed_principal - accrued_borrow
-        trade_returns.append(cash / max(init_cash, 1e-12) - 1.0)
+        cash = max(cash, 0.0)
+        trade_returns.append(cash / max(trade_entry_equity, 1e-12) - 1.0)
         equity_curve[-1] = cash
 
     return {
@@ -122,6 +128,7 @@ def run_backtest(policy: Policy, cache: IndicatorCache, data: pd.DataFrame, conf
     slippage = float(cfg.get("slippage", 0.0005))
     leverage = float(cfg.get("leverage", 1.0))
     borrow_cost_rate = float(cfg.get("borrow_cost_rate", 0.0))
+    risk_free_rate_annual = float(cfg.get("risk_free_rate_annual", 0.0))
     freq = str(cfg.get("freq", "1D"))
 
     close = data["close"].to_numpy(dtype=float)
@@ -149,7 +156,7 @@ def run_backtest(policy: Policy, cache: IndicatorCache, data: pd.DataFrame, conf
         borrow_cost_rate=borrow_cost_rate,
         freq=freq,
     )
-    metrics = extract_metrics(raw, freq=freq)
+    metrics = extract_metrics(raw, freq=freq, risk_free_rate_annual=risk_free_rate_annual)
     metrics["equity_curve"] = raw["equity_curve"]
     return metrics
 

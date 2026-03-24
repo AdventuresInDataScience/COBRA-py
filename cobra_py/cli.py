@@ -67,11 +67,13 @@ def run(data_path: str, config_path: str | None, output_path: str | None, object
         n_exit_rules=int(cfg["policy"].get("n_exit_rules", 1)),
         registry=active_registry,
         seed=int(cfg["optimiser"].get("seed", 42)),
+        backtest_config=cfg["backtest"],
     )
 
     obj_cfg = {
         "objective": cfg["objective"].get("name", "sharpe"),
         "composite_weights": cfg["objective"].get("composite_weights", [0.5, 0.3, 0.1, 0.1]),
+        "max_drawdown_cap": cfg["objective"].get("max_drawdown_cap", 0.20),
         "complexity_penalty": cfg["objective"].get("complexity_penalty", 0.02),
         "min_trades": cfg["objective"].get("min_trades", 10),
         "n_entry_rules": int(cfg["policy"].get("n_entry_rules", 3)),
@@ -84,13 +86,34 @@ def run(data_path: str, config_path: str | None, output_path: str | None, object
     seed_n = int(cfg["optimiser"].get("seed", 42))
 
     if opt_name == "nevergrad":
-        result = run_nevergrad(cache, train, cs, obj_cfg, bt_cfg, budget_n, seed=seed_n)
+        result = run_nevergrad(
+            cache,
+            train,
+            cs,
+            obj_cfg,
+            bt_cfg,
+            budget_n,
+            seed=seed_n,
+            optimiser_name=str(cfg["optimiser"].get("nevergrad_algorithm", "NGOpt")),
+        )
     elif opt_name == "tpe":
         result = run_tpe(cache, train, cs, obj_cfg, bt_cfg, budget_n, seed=seed_n)
     else:
         if opt_name != "dehb":
             raise click.ClickException("Unknown optimiser. Use one of: dehb, nevergrad, tpe")
-        result = run_dehb(cache, train, cs, obj_cfg, bt_cfg, budget_n, seed=seed_n)
+        result = run_dehb(
+            cache,
+            train,
+            cs,
+            obj_cfg,
+            bt_cfg,
+            budget_n,
+            seed=seed_n,
+            dehb_backend=str(cfg["optimiser"].get("dehb_backend", "auto")),
+            min_fidelity=float(cfg["optimiser"].get("min_fidelity", 0.2)),
+            max_fidelity=float(cfg["optimiser"].get("max_fidelity", 1.0)),
+            n_workers=int(cfg["optimiser"].get("n_workers", 1)),
+        )
 
     wf_result = None
     if bool(cfg["validation"].get("walk_forward", True)):
@@ -101,8 +124,21 @@ def run(data_path: str, config_path: str | None, output_path: str | None, object
                 n_exit_rules=int(full_cfg["policy"].get("n_exit_rules", 1)),
                 registry=active_registry,
                 seed=seed_n,
+                backtest_config=bt_cfg,
             )
-            return run_dehb(fold_cache, train_df, fold_cs, obj_cfg, bt_cfg, max(20, budget_n // 5), seed=seed_n)
+            return run_dehb(
+                fold_cache,
+                train_df,
+                fold_cs,
+                obj_cfg,
+                bt_cfg,
+                max(20, budget_n // 5),
+                seed=seed_n,
+                dehb_backend=str(cfg["optimiser"].get("dehb_backend", "auto")),
+                min_fidelity=float(cfg["optimiser"].get("min_fidelity", 0.2)),
+                max_fidelity=float(cfg["optimiser"].get("max_fidelity", 1.0)),
+                n_workers=int(cfg["optimiser"].get("n_workers", 1)),
+            )
 
         wf_result = walk_forward_validate(
             data=test,
@@ -110,6 +146,7 @@ def run(data_path: str, config_path: str | None, output_path: str | None, object
             config=cfg,
             n_splits=int(cfg["validation"].get("n_splits", 3)),
             train_pct=float(cfg["validation"].get("train_pct", 0.7)),
+            registry=active_registry,
         )
 
     payload = generate_report(result, wf_result, cfg["output"].get("path", "./results/"))

@@ -77,6 +77,15 @@ runs = {
             "min_trades": 1,
         },
         "policy": {"n_entry_rules": 2, "n_exit_rules": 1},
+        "indicators": {
+            "param_ranges": {
+                "bb": {
+                    "period": {"start": 10, "stop": 200, "step": 5},
+                    "std": {"range": [1.5, 3.0, 0.5]},
+                    "ma_type": ["sma", "ema"],
+                }
+            }
+        },
     },
 }
 
@@ -90,11 +99,24 @@ for run_name, overrides in runs.items():
         overrides=overrides,
         output_path=out_dir,
         run_walk_forward=False,
+        evaluate_oos=True,
     )
     named_reports[run_name] = result["report"]
 
     with (out_dir / "effective_config.yaml").open("w", encoding="utf-8") as f:
         yaml.safe_dump(result["config"], f, sort_keys=False)
+
+    print(f"\nStrategy for {run_name}:\n{result['report'].get('policy_human_readable', '')}\n")
+    if result.get("oos_metrics"):
+        oos = result["oos_metrics"]
+        print(
+            "OOS metrics:",
+            {
+                "total_return": oos.get("total_return"),
+                "sharpe_ratio": oos.get("sharpe_ratio"),
+                "max_drawdown": oos.get("max_drawdown"),
+            },
+        )
 
 
 # %% 5. Summary table
