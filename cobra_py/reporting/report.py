@@ -18,6 +18,7 @@ OBJECTIVE_TO_METRIC = {
     "sortino": ("sortino_ratio", "Sortino ratio"),
     "ulcer": ("ulcer_index", "Ulcer index"),
     "max_return": ("total_return", "Total return"),
+    "max_return_dd_cap": ("total_return", "Total return (DD constrained)"),
 }
 
 

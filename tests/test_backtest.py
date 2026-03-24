@@ -1,4 +1,7 @@
-﻿from cobra_py.backtest.engine import run_backtest
+﻿import numpy as np
+
+from cobra_py.backtest.engine import run_backtest
+from cobra_py.backtest.engine import _simulate_single_position
 from cobra_py.objective.function import compute_objective
 
 
@@ -12,4 +15,90 @@ def test_min_trades_penalty(sample_ohlcv_data, small_cache, simple_policy):
     metrics = run_backtest(simple_policy, small_cache, sample_ohlcv_data.iloc[:300], {"init_cash": 10000.0})
     score = compute_objective(metrics, simple_policy, {"objective": "sharpe", "min_trades": 9999})
     assert score == 999.0
+
+
+def test_leverage_increases_upside_without_borrow_cost():
+    close = np.array([100.0, 105.0, 110.0])
+    high = close.copy()
+    low = close.copy()
+    entries = np.array([True, False, False])
+    exits = np.array([False, False, False])
+    sl = np.array([np.nan, np.nan, np.nan])
+    tp = np.array([np.nan, np.nan, np.nan])
+
+    no_lev = _simulate_single_position(
+        close=close,
+        high=high,
+        low=low,
+        entries=entries,
+        exits=exits,
+        sl_levels=sl,
+        tp_levels=tp,
+        init_cash=10000.0,
+        fee_rate=0.0,
+        slippage=0.0,
+        leverage=1.0,
+        borrow_cost_rate=0.0,
+        freq="1D",
+    )
+    lev2 = _simulate_single_position(
+        close=close,
+        high=high,
+        low=low,
+        entries=entries,
+        exits=exits,
+        sl_levels=sl,
+        tp_levels=tp,
+        init_cash=10000.0,
+        fee_rate=0.0,
+        slippage=0.0,
+        leverage=2.0,
+        borrow_cost_rate=0.0,
+        freq="1D",
+    )
+
+    assert lev2["equity_curve"][-1] > no_lev["equity_curve"][-1]
+
+
+def test_borrow_cost_reduces_leveraged_equity():
+    close = np.array([100.0, 101.0, 102.0, 103.0, 104.0])
+    high = close.copy()
+    low = close.copy()
+    entries = np.array([True, False, False, False, False])
+    exits = np.array([False, False, False, False, False])
+    sl = np.array([np.nan, np.nan, np.nan, np.nan, np.nan])
+    tp = np.array([np.nan, np.nan, np.nan, np.nan, np.nan])
+
+    low_cost = _simulate_single_position(
+        close=close,
+        high=high,
+        low=low,
+        entries=entries,
+        exits=exits,
+        sl_levels=sl,
+        tp_levels=tp,
+        init_cash=10000.0,
+        fee_rate=0.0,
+        slippage=0.0,
+        leverage=2.0,
+        borrow_cost_rate=0.0,
+        freq="1D",
+    )
+    high_cost = _simulate_single_position(
+        close=close,
+        high=high,
+        low=low,
+        entries=entries,
+        exits=exits,
+        sl_levels=sl,
+        tp_levels=tp,
+        init_cash=10000.0,
+        fee_rate=0.0,
+        slippage=0.0,
+        leverage=2.0,
+        borrow_cost_rate=0.20,
+        freq="1D",
+    )
+
+    assert high_cost["equity_curve"][-1] < low_cost["equity_curve"][-1]
 

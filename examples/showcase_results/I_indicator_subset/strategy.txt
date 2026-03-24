@@ -1,0 +1,8 @@
+Entry conditions (ALL must be true simultaneously):
+  Rule 1: bb(30, 2.5, 'ema') < price
+
+Exit conditions:
+  Rule 1: sma(75,) > 12.828566328376134
+
+Stop-loss: bb_lower (20, 2.0, 'sma')
+Take-profit: pct (0.08151431344502254,)

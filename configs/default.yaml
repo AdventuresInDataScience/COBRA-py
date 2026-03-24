@@ -32,11 +32,17 @@ backtest:
   fee_rate: 0.001
   # Per-trade slippage as decimal fraction of execution price (0.0005 = 0.05%).
   slippage: 0.0005
+  # Gross leverage multiplier for position sizing (1.0 = no leverage).
+  leverage: 1.0
+  # Annualized borrow cost for leveraged notional beyond equity (0.06 = 6% per year).
+  borrow_cost_rate: 0.00
   freq: '1D'
 
 objective:
-  # Options: sharpe, calmar, sortino, ulcer, max_return, composite.
+  # Options: sharpe, calmar, sortino, ulcer, max_return, max_return_dd_cap, composite.
   name: 'sharpe'
+  # Used only when name: max_return_dd_cap (0.20 = max 20% drawdown).
+  max_drawdown_cap: 0.20
   # Used only when name: composite.
   # score = -(w0*sharpe + w1*calmar + w2*total_return - w3*abs(max_drawdown)).
   composite_weights: [0.5, 0.3, 0.1, 0.1]

@@ -10,8 +10,14 @@ This folder contains block-runnable `#%%` scripts that work like notebooks in VS
 - `spy_demo.py`: Minimal helper-API demo with diverse optimiser/objective runs (`dehb`, `nevergrad`, `tpe`) at high-search budgets.
 - `spy_showcase.py`: Rich scenario showcase with:
   - multiple optimisers/objectives/seeds
+  - full-history SPY data from 1996
+  - explicit `max_return` objective run
+  - `max_return_dd_cap` (return under drawdown cap) objective run
   - fee/slippage sensitivity
+  - leverage and borrow-cost sensitivity run
   - indicator subset/range filtering example
+  - strategy printout text for interpretability
+  - buy-and-hold baseline in comparison charts
   - plots and CSV exports
   - helper-API-first workflow patterns
 
@@ -47,6 +53,7 @@ uv run python examples/spy_showcase.py
 - `helper_summary.csv`
 - `equity_curves.png`
 - `metric_score_comparison.png`
+- per-run `strategy.txt` files
 - per-scenario report files and effective config snapshots
 
 ## Interpreting The Showcase

@@ -112,8 +112,11 @@ Main config file: [configs/default.yaml](configs/default.yaml).
 - `backtest.init_cash`: starting portfolio value.
 - `backtest.fee_rate`: decimal transaction fee per trade notional (`0.001` = 0.1%).
 - `backtest.slippage`: decimal execution slippage (`0.0005` = 0.05%).
+- `backtest.leverage`: gross leverage multiplier (`1.0` = unlevered).
+- `backtest.borrow_cost_rate`: annualized borrow rate applied to leveraged notional above equity (`0.06` = 6%/year).
 
-- `objective.name`: one of `sharpe`, `calmar`, `sortino`, `ulcer`, `max_return`, `composite`.
+- `objective.name`: one of `sharpe`, `calmar`, `sortino`, `ulcer`, `max_return`, `max_return_dd_cap`, `composite`.
+- `objective.max_drawdown_cap`: used by `max_return_dd_cap` as a hard max drawdown limit.
 - `objective.composite_weights`: used only for `composite`, with score:
 
 $$

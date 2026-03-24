@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+import re
 
 import numpy as np
 import pandas as pd
@@ -38,6 +39,55 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def _normalize_name(name: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(name).strip().lower()).strip("_")
+
+
+def _extract_ohlcv_from_yfinance(raw: pd.DataFrame) -> pd.DataFrame:
+    data = raw.copy()
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = ["_".join(_normalize_name(p) for p in col if str(p).strip()) for col in data.columns]
+    else:
+        data.columns = [_normalize_name(c) for c in data.columns]
+
+    def pick_column(aliases: list[str]) -> str | None:
+        cols = list(data.columns)
+        for alias in aliases:
+            if alias in cols:
+                return alias
+        for alias in aliases:
+            prefix = f"{alias}_"
+            for c in cols:
+                if c.startswith(prefix):
+                    return c
+        return None
+
+    mapping = {
+        "open": ["open", "o"],
+        "high": ["high", "h"],
+        "low": ["low", "l"],
+        # Prefer raw close over adjusted close so OHLC consistency checks remain valid.
+        "close": ["close", "c", "adj_close", "adjusted_close", "close_adj"],
+        "volume": ["volume", "vol", "v"],
+    }
+
+    selected_cols: dict[str, str] = {}
+    missing: list[str] = []
+    for target, aliases in mapping.items():
+        col = pick_column(aliases)
+        if col is None:
+            missing.append(target)
+        else:
+            selected_cols[target] = col
+
+    if missing:
+        raise ValueError(f"Could not map yfinance columns for {missing}; available columns: {list(data.columns)}")
+
+    out = pd.DataFrame({k: data[v] for k, v in selected_cols.items()}, index=data.index)
+    out.index.name = "datetime"
+    return out
+
+
 def fetch_yfinance_ohlcv(symbol: str = "SPY", start: str = "2018-01-01", end: str | None = None, interval: str = "1d") -> pd.DataFrame:
     try:
         import yfinance as yf
@@ -48,14 +98,15 @@ def fetch_yfinance_ohlcv(symbol: str = "SPY", start: str = "2018-01-01", end: st
     if raw.empty:
         raise RuntimeError(f"No data returned for symbol '{symbol}'")
 
-    raw.index.name = "datetime"
-    return load_ohlcv(raw, min_bars=1)
+    ohlcv = _extract_ohlcv_from_yfinance(raw)
+    return load_ohlcv(ohlcv, min_bars=1)
 
 
 def make_objective_config(cfg: dict[str, Any]) -> dict[str, Any]:
     return {
         "objective": cfg["objective"].get("name", "sharpe"),
         "composite_weights": cfg["objective"].get("composite_weights", [0.5, 0.3, 0.1, 0.1]),
+        "max_drawdown_cap": float(cfg["objective"].get("max_drawdown_cap", 0.20)),
         "complexity_penalty": cfg["objective"].get("complexity_penalty", 0.02),
         "min_trades": cfg["objective"].get("min_trades", 10),
         "n_entry_rules": int(cfg["policy"].get("n_entry_rules", 3)),
@@ -78,7 +129,7 @@ def list_available_optimisers() -> list[str]:
 
 
 def list_available_objectives() -> list[str]:
-    return ["sharpe", "calmar", "sortino", "ulcer", "max_return", "composite"]
+    return ["sharpe", "calmar", "sortino", "ulcer", "max_return", "max_return_dd_cap", "composite"]
 
 
 def _run_with_optimiser(name: str, **kwargs):

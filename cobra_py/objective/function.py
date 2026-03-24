@@ -25,6 +25,13 @@ def compute_objective(metrics: dict[str, float], policy: Policy, config: dict[st
         raw = float(metrics.get("ulcer_index", 999.0))
     elif objective_key == "max_return":
         raw = -float(metrics.get("total_return", -999.0))
+    elif objective_key == "max_return_dd_cap":
+        dd_cap = abs(float(cfg.get("max_drawdown_cap", 0.20)))
+        max_dd = abs(float(metrics.get("max_drawdown", -999.0)))
+        if max_dd > dd_cap:
+            # Hard feasibility penalty: maximize return only among strategies that satisfy drawdown cap.
+            return 999.0 + (max_dd - dd_cap)
+        raw = -float(metrics.get("total_return", -999.0))
     elif objective_key == "composite":
         w = cfg.get("composite_weights", [0.5, 0.3, 0.1, 0.1])
         raw = -(

@@ -1,0 +1,8 @@
+Entry conditions (ALL must be true simultaneously):
+  Rule 1: bb(10, 2.0, 'sma') crosses_above 95.57655903746179
+
+Exit conditions:
+  (none - exits driven by stop-loss and take-profit only)
+
+Stop-loss: bb_lower (20, 2.0, 'sma')
+Take-profit: risk_reward (4.007551868273181,)

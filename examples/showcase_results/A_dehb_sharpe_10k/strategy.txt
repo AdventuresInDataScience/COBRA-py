@@ -1,0 +1,9 @@
+Entry conditions (ALL must be true simultaneously):
+  Rule 1: bb(40, 1.5, 'sma') crosses_below 89.27574345591054
+  Rule 2: bb(30, 2.0, 'ema') < price
+
+Exit conditions:
+  Rule 1: bb(50, 2.5, 'sma') > 3.7624380609783015
+
+Stop-loss: bb_lower (20, 2.0, 'sma')
+Take-profit: risk_reward (3.290206949351665,)

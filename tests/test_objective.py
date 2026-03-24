@@ -25,3 +25,17 @@ def test_ulcer_objective_prefers_lower_ulcer_index():
     high_risk = {"ulcer_index": 0.15, "n_trades": 20}
     assert compute_objective(low_risk, POLICY_SMALL, {"objective": "ulcer"}) < compute_objective(high_risk, POLICY_SMALL, {"objective": "ulcer"})
 
+
+def test_max_return_dd_cap_prefers_feasible_high_return():
+    feasible_hi = {"total_return": 0.30, "max_drawdown": -0.15, "n_trades": 20}
+    feasible_lo = {"total_return": 0.10, "max_drawdown": -0.10, "n_trades": 20}
+    cfg = {"objective": "max_return_dd_cap", "max_drawdown_cap": 0.20}
+    assert compute_objective(feasible_hi, POLICY_SMALL, cfg) < compute_objective(feasible_lo, POLICY_SMALL, cfg)
+
+
+def test_max_return_dd_cap_penalises_drawdown_breach():
+    feasible = {"total_return": 0.10, "max_drawdown": -0.15, "n_trades": 20}
+    violating = {"total_return": 0.60, "max_drawdown": -0.35, "n_trades": 20}
+    cfg = {"objective": "max_return_dd_cap", "max_drawdown_cap": 0.20}
+    assert compute_objective(violating, POLICY_SMALL, cfg) > compute_objective(feasible, POLICY_SMALL, cfg)
+

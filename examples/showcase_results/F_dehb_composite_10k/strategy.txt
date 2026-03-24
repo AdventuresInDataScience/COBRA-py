@@ -1,0 +1,8 @@
+Entry conditions (ALL must be true simultaneously):
+  Rule 1: sma(150,) > price
+
+Exit conditions:
+  Rule 1: ema(200,) > price
+
+Stop-loss: atr_mult (3.1027426143457615, 7)
+Take-profit: risk_reward (3.6373019095851475,)

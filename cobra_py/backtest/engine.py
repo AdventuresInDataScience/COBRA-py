@@ -13,6 +13,14 @@ from cobra_py.policy.sl_tp import compute_sl, compute_tp
 from .metrics import extract_metrics
 
 
+def _bars_per_year(freq: str) -> float:
+    if freq.endswith("H"):
+        return 24.0 * 252.0
+    if freq.endswith("T") or freq.endswith("min"):
+        return 390.0 * 252.0
+    return 252.0
+
+
 def _simulate_single_position(
     close: np.ndarray,
     high: np.ndarray,
@@ -24,13 +32,21 @@ def _simulate_single_position(
     init_cash: float,
     fee_rate: float,
     slippage: float,
+    leverage: float,
+    borrow_cost_rate: float,
+    freq: str,
 ) -> dict:
     cash = float(init_cash)
     pos_qty = 0.0
     in_pos = False
     entry_price = 0.0
+    borrowed_principal = 0.0
+    accrued_borrow = 0.0
     stop = np.nan
     take = np.nan
+    bars_per_year = _bars_per_year(freq)
+    borrow_per_bar = max(float(borrow_cost_rate), 0.0) / max(bars_per_year, 1.0)
+    leverage = max(float(leverage), 1.0)
 
     equity_curve = []
     trade_returns = []
@@ -40,9 +56,15 @@ def _simulate_single_position(
 
         if not in_pos and bool(entries[i]):
             fill = px * (1.0 + slippage)
-            fee = cash * fee_rate
-            deployable = max(cash - fee, 0.0)
-            pos_qty = deployable / max(fill, 1e-12)
+            gross_notional = cash * leverage
+            fee = gross_notional * fee_rate
+            equity_after_fee = cash - fee
+            if equity_after_fee <= 0:
+                equity_curve.append(cash)
+                continue
+            pos_qty = gross_notional / max(fill, 1e-12)
+            borrowed_principal = max(gross_notional - equity_after_fee, 0.0)
+            accrued_borrow = 0.0
             cash = 0.0
             in_pos = True
             entry_price = fill
@@ -50,6 +72,7 @@ def _simulate_single_position(
             take = tp_levels[i]
 
         elif in_pos:
+            accrued_borrow += borrowed_principal * borrow_per_bar
             hit_stop = np.isfinite(stop) and low[i] <= stop
             hit_take = np.isfinite(take) and high[i] >= take
             explicit_exit = bool(exits[i])
@@ -63,11 +86,13 @@ def _simulate_single_position(
                 exit_px *= (1.0 - slippage)
                 gross = pos_qty * exit_px
                 fee = gross * fee_rate
-                cash = gross - fee
+                cash = gross - fee - borrowed_principal - accrued_borrow
                 trade_returns.append(cash / max(init_cash, 1e-12) - 1.0)
                 pos_qty = 0.0
                 in_pos = False
                 entry_price = 0.0
+                borrowed_principal = 0.0
+                accrued_borrow = 0.0
                 stop = np.nan
                 take = np.nan
 
@@ -75,10 +100,11 @@ def _simulate_single_position(
         equity_curve.append(equity)
 
     if in_pos:
+        accrued_borrow += borrowed_principal * borrow_per_bar
         final_px = close[-1] * (1.0 - slippage)
         gross = pos_qty * final_px
         fee = gross * fee_rate
-        cash = gross - fee
+        cash = gross - fee - borrowed_principal - accrued_borrow
         trade_returns.append(cash / max(init_cash, 1e-12) - 1.0)
         equity_curve[-1] = cash
 
@@ -94,6 +120,8 @@ def run_backtest(policy: Policy, cache: IndicatorCache, data: pd.DataFrame, conf
     init_cash = float(cfg.get("init_cash", 10000.0))
     fee_rate = float(cfg.get("fee_rate", 0.001))
     slippage = float(cfg.get("slippage", 0.0005))
+    leverage = float(cfg.get("leverage", 1.0))
+    borrow_cost_rate = float(cfg.get("borrow_cost_rate", 0.0))
     freq = str(cfg.get("freq", "1D"))
 
     close = data["close"].to_numpy(dtype=float)
@@ -117,6 +145,9 @@ def run_backtest(policy: Policy, cache: IndicatorCache, data: pd.DataFrame, conf
         init_cash=init_cash,
         fee_rate=fee_rate,
         slippage=slippage,
+        leverage=leverage,
+        borrow_cost_rate=borrow_cost_rate,
+        freq=freq,
     )
     metrics = extract_metrics(raw, freq=freq)
     metrics["equity_curve"] = raw["equity_curve"]
