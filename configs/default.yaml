@@ -1,0 +1,63 @@
+data:
+  path: null
+  freq: '1D'
+  min_bars: 500
+  train_split: 0.7
+
+indicators:
+  # Parallel workers for indicator precompute. -1 means all CPU cores.
+  n_jobs: -1
+  # Optional whitelist. Empty/null uses all available indicators from the registry.
+  include: []
+  # Optional blacklist applied after include.
+  exclude: []
+  # Optional per-indicator parameter overrides.
+  # Example:
+  # param_ranges:
+  #   rsi:
+  #     period: [7, 14, 21]
+  #   bb:
+  #     period: [20, 30]
+  #     std: [2.0, 2.5]
+  #     ma_type: ['sma', 'ema']
+  param_ranges: {}
+
+policy:
+  n_entry_rules: 3
+  n_exit_rules: 1
+
+backtest:
+  init_cash: 10000.0
+  # Per-trade transaction fee as decimal fraction of traded notional (0.001 = 0.1%).
+  fee_rate: 0.001
+  # Per-trade slippage as decimal fraction of execution price (0.0005 = 0.05%).
+  slippage: 0.0005
+  freq: '1D'
+
+objective:
+  # Options: sharpe, calmar, sortino, ulcer, max_return, composite.
+  name: 'sharpe'
+  # Used only when name: composite.
+  # score = -(w0*sharpe + w1*calmar + w2*total_return - w3*abs(max_drawdown)).
+  composite_weights: [0.5, 0.3, 0.1, 0.1]
+  # Complexity regularization added to score per active rule.
+  complexity_penalty: 0.02
+  # If strategy trades fewer than this, score is set to 999.0 penalty.
+  min_trades: 10
+
+optimiser:
+  # Options: dehb, nevergrad, tpe.
+  name: 'dehb'
+  budget: 10000
+  seed: 42
+  min_fidelity: 0.2
+  max_fidelity: 1.0
+  n_workers: 1
+
+validation:
+  walk_forward: true
+  n_splits: 3
+  train_pct: 0.7
+
+output:
+  path: './results/'

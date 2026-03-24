@@ -1,0 +1,228 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+import yaml
+
+from cobra_py.data.loader import load_ohlcv
+from cobra_py.data.preprocessor import preprocess
+from cobra_py.indicators.precompute import precompute_all
+from cobra_py.indicators.registry import DEFAULT_REGISTRY, build_registry_from_config
+from cobra_py.reporting.report import generate_report
+from cobra_py.search.dehb_runner import run_dehb
+from cobra_py.search.nevergrad_runner import run_nevergrad
+from cobra_py.search.space import build_config_space
+from cobra_py.search.tpe_runner import run_tpe
+from cobra_py.validation.walk_forward import walk_forward_validate
+
+
+def deep_update(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
+    out = deepcopy(base)
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = deep_update(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
+    if config_path is None:
+        root = Path(__file__).resolve().parents[1]
+        config_path = root / "configs" / "default.yaml"
+    with Path(config_path).open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def fetch_yfinance_ohlcv(symbol: str = "SPY", start: str = "2018-01-01", end: str | None = None, interval: str = "1d") -> pd.DataFrame:
+    try:
+        import yfinance as yf
+    except ImportError as exc:  # pragma: no cover - optional dependency path
+        raise ImportError("yfinance is required for fetch_yfinance_ohlcv. Install with `pip install yfinance`.") from exc
+
+    raw = yf.download(symbol, start=start, end=end, interval=interval, auto_adjust=False, progress=False)
+    if raw.empty:
+        raise RuntimeError(f"No data returned for symbol '{symbol}'")
+
+    raw.index.name = "datetime"
+    return load_ohlcv(raw, min_bars=1)
+
+
+def make_objective_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "objective": cfg["objective"].get("name", "sharpe"),
+        "composite_weights": cfg["objective"].get("composite_weights", [0.5, 0.3, 0.1, 0.1]),
+        "complexity_penalty": cfg["objective"].get("complexity_penalty", 0.02),
+        "min_trades": cfg["objective"].get("min_trades", 10),
+        "n_entry_rules": int(cfg["policy"].get("n_entry_rules", 3)),
+        "n_exit_rules": int(cfg["policy"].get("n_exit_rules", 1)),
+    }
+
+
+def get_active_registry(cfg: dict[str, Any]):
+    ind_cfg = cfg.get("indicators", {})
+    return build_registry_from_config(
+        DEFAULT_REGISTRY,
+        include=ind_cfg.get("include"),
+        exclude=ind_cfg.get("exclude"),
+        param_ranges=ind_cfg.get("param_ranges"),
+    )
+
+
+def list_available_optimisers() -> list[str]:
+    return ["dehb", "nevergrad", "tpe"]
+
+
+def list_available_objectives() -> list[str]:
+    return ["sharpe", "calmar", "sortino", "ulcer", "max_return", "composite"]
+
+
+def _run_with_optimiser(name: str, **kwargs):
+    key = str(name).strip().lower()
+    if key == "dehb":
+        return run_dehb(**kwargs)
+    if key == "nevergrad":
+        return run_nevergrad(**kwargs)
+    if key == "tpe":
+        return run_tpe(**kwargs)
+    raise ValueError(f"Unknown optimiser '{name}'. Available: {list_available_optimisers()}")
+
+
+def run_optimiser(
+    source: str | Path | pd.DataFrame,
+    config: dict[str, Any] | None = None,
+    config_path: str | Path | None = None,
+    overrides: dict[str, Any] | None = None,
+    output_path: str | Path | None = None,
+    run_walk_forward: bool = False,
+) -> dict[str, Any]:
+    cfg = deepcopy(config) if config is not None else load_config(config_path)
+    cfg = deep_update(cfg, overrides or {})
+    if output_path is not None:
+        cfg.setdefault("output", {})["path"] = str(output_path)
+
+    data = load_ohlcv(
+        source,
+        freq=cfg["data"].get("freq"),
+        min_bars=int(cfg["data"].get("min_bars", 500)),
+    )
+    train, test = preprocess(data, cfg["data"])
+
+    registry = get_active_registry(cfg)
+    cache = precompute_all(train, registry, n_jobs=int(cfg["indicators"].get("n_jobs", -1)))
+    cs = build_config_space(
+        n_entry_rules=int(cfg["policy"].get("n_entry_rules", 3)),
+        n_exit_rules=int(cfg["policy"].get("n_exit_rules", 1)),
+        registry=registry,
+        seed=int(cfg["optimiser"].get("seed", 42)),
+    )
+
+    result = _run_with_optimiser(
+        cfg["optimiser"].get("name", "dehb"),
+        cache=cache,
+        data=train,
+        config_space=cs,
+        obj_config=make_objective_config(cfg),
+        backtest_config=cfg["backtest"],
+        budget=int(cfg["optimiser"].get("budget", 200)),
+        seed=int(cfg["optimiser"].get("seed", 42)),
+    )
+
+    wf_result = None
+    if run_walk_forward and bool(cfg["validation"].get("walk_forward", True)):
+        def optimise_fold(train_df: pd.DataFrame, full_cfg: dict[str, Any]):
+            fold_cache = precompute_all(train_df, registry, n_jobs=1)
+            fold_cs = build_config_space(
+                n_entry_rules=int(full_cfg["policy"].get("n_entry_rules", 3)),
+                n_exit_rules=int(full_cfg["policy"].get("n_exit_rules", 1)),
+                registry=registry,
+                seed=int(cfg["optimiser"].get("seed", 42)),
+            )
+            return _run_with_optimiser(
+                cfg["optimiser"].get("name", "dehb"),
+                cache=fold_cache,
+                data=train_df,
+                config_space=fold_cs,
+                obj_config=make_objective_config(cfg),
+                backtest_config=cfg["backtest"],
+                budget=max(20, int(cfg["optimiser"].get("budget", 200)) // 5),
+                seed=int(cfg["optimiser"].get("seed", 42)),
+            )
+
+        wf_result = walk_forward_validate(
+            data=test,
+            optimise_fn=optimise_fold,
+            config=cfg,
+            n_splits=int(cfg["validation"].get("n_splits", 3)),
+            train_pct=float(cfg["validation"].get("train_pct", 0.7)),
+        )
+
+    payload = generate_report(result, wf_result, cfg["output"].get("path", "./results/"))
+    return {
+        "config": cfg,
+        "train": train,
+        "test": test,
+        "result": result,
+        "report": payload,
+        "walk_forward": wf_result,
+    }
+
+
+def summarise_reports(named_reports: dict[str, dict[str, Any]]) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for name, payload in named_reports.items():
+        summary = payload.get("summary", {})
+        best_metrics = payload.get("best_metrics", {})
+        rows.append(
+            {
+                "run": name,
+                "optimiser": summary.get("optimiser_name"),
+                "objective": summary.get("objective"),
+                "best_metric_name": summary.get("best_metric_name"),
+                "best_metric_value": summary.get("best_metric_value"),
+                "best_score": summary.get("best_score"),
+                "evals": summary.get("n_evaluations"),
+                "total_return": best_metrics.get("total_return"),
+                "sharpe_ratio": best_metrics.get("sharpe_ratio"),
+                "sortino_ratio": best_metrics.get("sortino_ratio"),
+                "calmar_ratio": best_metrics.get("calmar_ratio"),
+                "ulcer_index": best_metrics.get("ulcer_index"),
+                "max_drawdown": best_metrics.get("max_drawdown"),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def plot_equity_curves(
+    named_reports: dict[str, dict[str, Any]],
+    normalize: bool = True,
+    title: str = "Strategy Equity Curves",
+    save_path: str | Path | None = None,
+):
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError as exc:  # pragma: no cover - optional dependency path
+        raise ImportError("matplotlib is required for plot_equity_curves. Install with `pip install matplotlib`.") from exc
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for name, payload in named_reports.items():
+        eq = np.asarray(payload.get("best_metrics", {}).get("equity_curve", []), dtype=float)
+        if len(eq) < 2:
+            continue
+        series = eq / max(eq[0], 1e-12) if normalize else eq
+        ax.plot(series, linewidth=1.8, label=name)
+
+    ax.set_title(title)
+    ax.set_xlabel("Bars")
+    ax.set_ylabel("Normalized equity" if normalize else "Equity")
+    ax.grid(alpha=0.25)
+    ax.legend(loc="best")
+    fig.tight_layout()
+
+    if save_path is not None:
+        fig.savefig(Path(save_path), dpi=140)
+    return fig, ax
