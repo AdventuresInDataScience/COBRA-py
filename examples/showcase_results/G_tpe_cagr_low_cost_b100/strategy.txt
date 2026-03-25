@@ -1,0 +1,9 @@
+Entry conditions (ALL must be true simultaneously):
+  Rule 1: rsi(16,) > 70.0
+  Rule 2: keltner(10, 10, 1.5) < price
+
+Exit conditions:
+  Rule 1: atr(20,) > price
+
+Stop-loss: bb_lower (20, 2.0, 'sma')
+Take-profit: atr_mult (5.75, 7)

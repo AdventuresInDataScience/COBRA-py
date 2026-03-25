@@ -1,0 +1,9 @@
+Entry conditions (ALL must be true simultaneously):
+  Rule 1: sma(13,) > price
+  Rule 2: macd(15, 21, 9) == price
+
+Exit conditions:
+  Rule 1: stoch(9, 7, 5) > 85.0
+
+Stop-loss: trailing_atr (3.25, 14)
+Take-profit: bb_upper (20, 2.0, 'sma')

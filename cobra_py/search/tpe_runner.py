@@ -20,6 +20,10 @@ def run_tpe(
     backtest_config: dict[str, Any],
     budget: int,
     seed: int = 42,
+    multivariate: bool = True,
+    group: bool = True,
+    n_startup_trials: int = 20,
+    constant_liar: bool = False,
 ) -> OptimisationResult:
     try:
         import optuna
@@ -33,7 +37,13 @@ def run_tpe(
     best_metrics = None
 
     n_eval = int(max(1, budget))
-    sampler = optuna.samplers.TPESampler(seed=seed)
+    sampler = optuna.samplers.TPESampler(
+        seed=seed,
+        multivariate=bool(multivariate),
+        group=bool(group),
+        n_startup_trials=int(max(1, n_startup_trials)),
+        constant_liar=bool(constant_liar),
+    )
     study = optuna.create_study(direction="minimize", sampler=sampler)
 
     def sample_cfg(sample_seed: int) -> dict[str, Any]:
@@ -43,8 +53,11 @@ def run_tpe(
 
     def objective(trial) -> float:
         nonlocal best_score, best_policy, best_metrics
-        sample_seed = int(trial.suggest_int("sample_seed", 0, 2_147_483_647))
-        cfg = sample_cfg(sample_seed)
+        if hasattr(config_space, "suggest_with_optuna"):
+            cfg = config_space.suggest_with_optuna(trial)
+        else:
+            sample_seed = int(trial.suggest_int("sample_seed", 0, 2_147_483_647))
+            cfg = sample_cfg(sample_seed)
         cfg["n_entry_rules"] = int(obj_config.get("n_entry_rules", 3))
         cfg["n_exit_rules"] = int(obj_config.get("n_exit_rules", 1))
 
@@ -67,7 +80,6 @@ def run_tpe(
                 "config": cfg,
                 "score": float(score),
                 "metrics": metrics,
-                "sample_seed": sample_seed,
                 "trial_number": int(trial.number),
             }
         )

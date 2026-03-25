@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.metadata as im
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -47,7 +48,8 @@ print("Available objectives:", list_available_objectives())
 
 # %% 3. Base config and data
 base_cfg = load_config(project_root / "configs" / "default.yaml")
-base_cfg["optimiser"]["budget"] = max(10000, int(base_cfg["optimiser"].get("budget", 10000)))
+demo_budget = int(os.getenv("COBRA_EXAMPLE_BUDGET", str(base_cfg["optimiser"].get("budget", 100))))
+base_cfg["optimiser"]["budget"] = max(10, demo_budget)
 base_cfg["indicators"]["n_jobs"] = 1
 
 spy_ohlcv = fetch_yfinance_ohlcv("SPY", start="2018-01-01", interval="1d")
@@ -57,20 +59,20 @@ print("Date range:", spy_ohlcv.index.min().date(), "to", spy_ohlcv.index.max().d
 
 # %% 4. Diverse runs (optimiser + objective combinations)
 runs = {
-    "dehb_sharpe_10k": {
-        "optimiser": {"name": "dehb", "budget": 10000, "seed": 42},
+    f"dehb_sharpe_b{demo_budget}": {
+        "optimiser": {"name": "dehb", "budget": demo_budget, "seed": 42},
         "objective": {"name": "sharpe", "min_trades": 1},
     },
-    "nevergrad_sortino_10k": {
-        "optimiser": {"name": "nevergrad", "budget": 10000, "seed": 42},
+    f"nevergrad_sortino_b{demo_budget}": {
+        "optimiser": {"name": "nevergrad", "budget": demo_budget, "seed": 42},
         "objective": {"name": "sortino", "min_trades": 1},
     },
-    "tpe_ulcer_10k": {
-        "optimiser": {"name": "tpe", "budget": 10000, "seed": 42},
+    f"tpe_ulcer_b{demo_budget}": {
+        "optimiser": {"name": "tpe", "budget": demo_budget, "seed": 42},
         "objective": {"name": "ulcer", "min_trades": 1},
     },
-    "dehb_composite_10k": {
-        "optimiser": {"name": "dehb", "budget": 10000, "seed": 123},
+    f"dehb_composite_b{demo_budget}": {
+        "optimiser": {"name": "dehb", "budget": demo_budget, "seed": 123},
         "objective": {
             "name": "composite",
             "composite_weights": [0.45, 0.30, 0.15, 0.10],
@@ -130,7 +132,7 @@ print("Saved:", summary_csv)
 
 # %% 6. Quick chart from helper API
 eq_png = results_dir / "equity_curves.png"
-plot_equity_curves(named_reports, normalize=True, title="SPY helper API demo (10k budgets)", save_path=eq_png)
+plot_equity_curves(named_reports, normalize=True, title=f"SPY helper API demo (budget={demo_budget})", save_path=eq_png)
 print("Saved:", eq_png)
 
 

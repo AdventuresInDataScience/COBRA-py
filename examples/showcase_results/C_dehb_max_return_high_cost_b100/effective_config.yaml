@@ -1,0 +1,62 @@
+data:
+  path: null
+  freq: 1D
+  min_bars: 500
+  train_split: 0.7
+indicators:
+  n_jobs: 1
+  include: []
+  exclude: []
+  param_ranges: {}
+policy:
+  n_entry_rules: 3
+  n_exit_rules: 1
+backtest:
+  init_cash: 10000.0
+  fee_rate: 0.002
+  slippage: 0.001
+  leverage: 1.0
+  leverage_range:
+    start: 0.5
+    stop: 5.0
+    step: 0.5
+  borrow_cost_rate: 0.06
+  risk_free_rate_annual: 0.02
+  borrow_cost_rate_range:
+    start: 0.0
+    stop: 0.12
+    step: 0.01
+  freq: 1D
+objective:
+  name: max_return
+  max_drawdown_cap: 0.1
+  composite_weights:
+  - 0.5
+  - 0.3
+  - 0.1
+  - 0.1
+  complexity_penalty: 0.02
+  min_trades: 1
+optimiser:
+  name: dehb
+  dehb_backend: auto
+  nevergrad_algorithm: NGOpt
+  budget: 100
+  seed: 42
+  min_fidelity: 0.2
+  max_fidelity: 1.0
+  n_workers: 1
+  dehb_mutation_factor: 0.8
+  dehb_crossover_rate: 0.7
+  dehb_population_size: 24
+  nevergrad_num_workers: 1
+  tpe_multivariate: true
+  tpe_group: true
+  tpe_n_startup_trials: 20
+  tpe_constant_liar: false
+validation:
+  walk_forward: true
+  n_splits: 3
+  train_pct: 0.7
+output:
+  path: C:\Users\malha\Documents\Projects\COBRA-py\examples\showcase_results\C_dehb_max_return_high_cost_b100

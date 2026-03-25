@@ -92,6 +92,12 @@ def _extract_ohlcv_from_yfinance(raw: pd.DataFrame) -> pd.DataFrame:
 
     out = pd.DataFrame({k: data[v] for k, v in selected_cols.items()}, index=data.index)
     out.index.name = "datetime"
+    out = out.sort_index()
+    out = out[~out.index.duplicated(keep="last")]
+    # yfinance can return sparse/empty bars for some dates; remove rows that fail core OHLC validity.
+    out = out.dropna(subset=["high", "low", "close"])
+    if out.empty:
+        raise ValueError("yfinance data contains no valid OHLC rows after dropping NaN high/low/close values")
     return out
 
 
@@ -136,18 +142,47 @@ def list_available_optimisers() -> list[str]:
 
 
 def list_available_objectives() -> list[str]:
-    return ["sharpe", "calmar", "sortino", "ulcer", "max_return", "max_return_dd_cap", "composite"]
+    return ["sharpe", "calmar", "car_mdd", "cagr", "sortino", "ulcer", "max_return", "max_return_dd_cap", "composite"]
 
 
 def _run_with_optimiser(name: str, **kwargs):
     key = str(name).strip().lower()
+    common = {
+        k: kwargs[k]
+        for k in ("cache", "data", "config_space", "obj_config", "backtest_config", "budget", "seed")
+        if k in kwargs
+    }
+
     if key == "dehb":
-        return run_dehb(**kwargs)
+        dehb_mutation_factor = kwargs.get("dehb_mutation_factor", 0.8)
+        dehb_crossover_rate = kwargs.get("dehb_crossover_rate", 0.7)
+        dehb_population_size = kwargs.get("dehb_population_size", 24)
+        return run_dehb(
+            **common,
+            mutation_factor=float(dehb_mutation_factor),
+            crossover_rate=float(dehb_crossover_rate),
+            population_size=int(dehb_population_size),
+            dehb_backend=str(kwargs.get("dehb_backend", "auto")),
+            min_fidelity=float(kwargs.get("min_fidelity", 0.2)),
+            max_fidelity=float(kwargs.get("max_fidelity", 1.0)),
+            n_workers=int(kwargs.get("n_workers", 1)),
+        )
     if key == "nevergrad":
-        ng_algo = kwargs.pop("nevergrad_algorithm", "NGOpt")
-        return run_nevergrad(**kwargs, optimiser_name=str(ng_algo))
+        ng_algo = kwargs.get("nevergrad_algorithm", "NGOpt")
+        ng_workers = kwargs.get("nevergrad_num_workers", 1)
+        return run_nevergrad(**common, optimiser_name=str(ng_algo), num_workers=int(ng_workers))
     if key == "tpe":
-        return run_tpe(**kwargs)
+        tpe_multivariate = kwargs.get("tpe_multivariate", True)
+        tpe_group = kwargs.get("tpe_group", True)
+        tpe_n_startup_trials = kwargs.get("tpe_n_startup_trials", 20)
+        tpe_constant_liar = kwargs.get("tpe_constant_liar", False)
+        return run_tpe(
+            **common,
+            multivariate=bool(tpe_multivariate),
+            group=bool(tpe_group),
+            n_startup_trials=int(tpe_n_startup_trials),
+            constant_liar=bool(tpe_constant_liar),
+        )
     raise ValueError(f"Unknown optimiser '{name}'. Available: {list_available_optimisers()}")
 
 
@@ -193,11 +228,19 @@ def run_optimiser(
         backtest_config=cfg["backtest"],
         budget=int(cfg["optimiser"].get("budget", 200)),
         seed=int(cfg["optimiser"].get("seed", 42)),
+        dehb_mutation_factor=float(cfg["optimiser"].get("dehb_mutation_factor", 0.8)),
+        dehb_crossover_rate=float(cfg["optimiser"].get("dehb_crossover_rate", 0.7)),
+        dehb_population_size=int(cfg["optimiser"].get("dehb_population_size", 24)),
         dehb_backend=cfg["optimiser"].get("dehb_backend", "auto"),
         min_fidelity=float(cfg["optimiser"].get("min_fidelity", 0.2)),
         max_fidelity=float(cfg["optimiser"].get("max_fidelity", 1.0)),
         n_workers=int(cfg["optimiser"].get("n_workers", 1)),
         nevergrad_algorithm=cfg["optimiser"].get("nevergrad_algorithm", "NGOpt"),
+        nevergrad_num_workers=int(cfg["optimiser"].get("nevergrad_num_workers", 1)),
+        tpe_multivariate=cfg["optimiser"].get("tpe_multivariate", True),
+        tpe_group=cfg["optimiser"].get("tpe_group", True),
+        tpe_n_startup_trials=cfg["optimiser"].get("tpe_n_startup_trials", 20),
+        tpe_constant_liar=cfg["optimiser"].get("tpe_constant_liar", False),
     )
 
     wf_result = None
@@ -225,11 +268,19 @@ def run_optimiser(
                 backtest_config=cfg["backtest"],
                 budget=max(20, int(cfg["optimiser"].get("budget", 200)) // 5),
                 seed=int(cfg["optimiser"].get("seed", 42)),
+                dehb_mutation_factor=float(cfg["optimiser"].get("dehb_mutation_factor", 0.8)),
+                dehb_crossover_rate=float(cfg["optimiser"].get("dehb_crossover_rate", 0.7)),
+                dehb_population_size=int(cfg["optimiser"].get("dehb_population_size", 24)),
                 dehb_backend=cfg["optimiser"].get("dehb_backend", "auto"),
                 min_fidelity=float(cfg["optimiser"].get("min_fidelity", 0.2)),
                 max_fidelity=float(cfg["optimiser"].get("max_fidelity", 1.0)),
                 n_workers=int(cfg["optimiser"].get("n_workers", 1)),
                 nevergrad_algorithm=cfg["optimiser"].get("nevergrad_algorithm", "NGOpt"),
+                nevergrad_num_workers=int(cfg["optimiser"].get("nevergrad_num_workers", 1)),
+                tpe_multivariate=cfg["optimiser"].get("tpe_multivariate", True),
+                tpe_group=cfg["optimiser"].get("tpe_group", True),
+                tpe_n_startup_trials=cfg["optimiser"].get("tpe_n_startup_trials", 20),
+                tpe_constant_liar=cfg["optimiser"].get("tpe_constant_liar", False),
             )
 
         wf_result = walk_forward_validate(
@@ -268,9 +319,11 @@ def summarise_reports(named_reports: dict[str, dict[str, Any]]) -> pd.DataFrame:
                 "best_score": summary.get("best_score"),
                 "evals": summary.get("n_evaluations"),
                 "total_return": best_metrics.get("total_return"),
+                "cagr": best_metrics.get("cagr"),
                 "sharpe_ratio": best_metrics.get("sharpe_ratio"),
                 "sortino_ratio": best_metrics.get("sortino_ratio"),
                 "calmar_ratio": best_metrics.get("calmar_ratio"),
+                "car_mdd_ratio": best_metrics.get("car_mdd_ratio"),
                 "ulcer_index": best_metrics.get("ulcer_index"),
                 "max_drawdown": best_metrics.get("max_drawdown"),
             }

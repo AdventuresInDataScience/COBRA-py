@@ -16,6 +16,7 @@ class RuleConfig:
     output2: str | None = None
     lookback: int | None = None
     band_side: str | None = None
+    group_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -38,3 +39,5 @@ class Policy:
     tp_config: TPConfig
     n_active_entry: int
     n_active_exit: int
+    entry_logic: str = "and"
+    exit_logic: str = "or"

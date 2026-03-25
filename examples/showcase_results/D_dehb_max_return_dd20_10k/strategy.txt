@@ -1,8 +1,0 @@
-Entry conditions (ALL must be true simultaneously):
-  Rule 1: wma(10,) crosses_above 80.9011558102577
-
-Exit conditions:
-  (none - exits driven by stop-loss and take-profit only)
-
-Stop-loss: swing_low (20,)
-Take-profit: risk_reward (4.653519153545668,)

@@ -20,6 +20,8 @@ uv run python examples/spy_showcase.py
 
 Expected outputs are written under [smoke_results](smoke_results) and [examples/showcase_results](examples/showcase_results).
 
+Note: default optimiser budget in [configs/default.yaml](configs/default.yaml) is now `100` for faster iteration. Increase this when you want deeper search.
+
 ## Examples
 
 Interactive, block-runnable demo scripts live in [examples/README.md](examples/README.md).
@@ -136,7 +138,9 @@ indicators:
 - `backtest.leverage_range`: optimiser search range for learned leverage values.
 - `backtest.borrow_cost_rate_range`: optimiser search range for learned financing costs.
 
-- `objective.name`: one of `sharpe`, `calmar`, `sortino`, `ulcer`, `max_return`, `max_return_dd_cap`, `composite`.
+- `objective.name`: one of `sharpe`, `calmar`, `car_mdd`, `cagr`, `sortino`, `ulcer`, `max_return`, `max_return_dd_cap`, `composite`.
+- `calmar` uses trailing 3-year CAGR and trailing 3-year max drawdown (36-month convention).
+- `car_mdd` uses full-period CAGR and full-period max drawdown (backward-looking full-sample ratio).
 - `objective.max_drawdown_cap`: used by `max_return_dd_cap` as a hard max drawdown limit.
 - `objective.composite_weights`: used only for `composite`, with score:
 
@@ -148,7 +152,7 @@ $$
 - `objective.min_trades`: if trades are below this, score becomes `999.0`.
 
 - `optimiser.name`: one of `dehb`, `nevergrad`, `tpe`.
-- `optimiser.budget`: number of sampled configurations.
+- `optimiser.budget`: number of sampled configurations (default `100` for quick first runs).
 - `optimiser.seed`: random seed for reproducibility.
 - `optimiser.dehb_backend`: DEHB backend selector (`auto`, `native`, `seed_de`).
 - `optimiser.min_fidelity`: lower fidelity used by native DEHB (fraction of train bars).
@@ -162,8 +166,67 @@ $$
 	- `dehb_backend: auto`: use true DEHB package when available, otherwise fallback to internal seed-DE surrogate.
 	- `dehb_backend: native`: force true DEHB package path and fail if package is missing.
 	- `dehb_backend: seed_de`: force internal surrogate backend.
+	- `dehb_mutation_factor`, `dehb_crossover_rate`, `dehb_population_size`: evolution controls for `seed_de` backend.
 - `nevergrad`: Nevergrad runner with configurable algorithm class from `optimiser.nevergrad_algorithm`.
+	- `nevergrad_num_workers`: parallel workers where supported by the selected Nevergrad optimizer.
 - `tpe`: Optuna TPE runner.
+	- `tpe_multivariate`, `tpe_group`, `tpe_n_startup_trials`, `tpe_constant_liar`: TPE efficiency controls for conditional spaces.
+
+### Parameter Type Handling
+
+The search space is strongly typed and conditional:
+
+- Categorical: connector logic (`and`/`or`/`dnf`), operators (`>`, `<`, `==`, `crosses_*`, pattern op), archetype, indicator names, output selectors.
+- Integer: lookbacks and discrete indicator lengths/periods.
+- Float / quantized float: risk settings such as SL/TP percentages, ATR multipliers, borrow costs, leverage ranges.
+
+This is important for optimiser efficiency on mixed conditional spaces, especially for TPE and Nevergrad.
+
+### Tuning Presets
+
+Use these as practical defaults by budget size; they apply across all optimisers.
+
+`small_budget` (fast iteration, <= 500 evals):
+
+```yaml
+optimiser:
+	name: tpe
+	budget: 300
+	seed: 42
+	tpe_multivariate: true
+	tpe_group: true
+	tpe_n_startup_trials: 40
+	tpe_constant_liar: false
+```
+
+`medium_budget` (balanced, 1k-5k evals):
+
+```yaml
+optimiser:
+	name: dehb
+	dehb_backend: auto
+	budget: 2500
+	seed: 42
+	min_fidelity: 0.2
+	max_fidelity: 1.0
+	n_workers: 1
+	dehb_mutation_factor: 0.8
+	dehb_crossover_rate: 0.7
+	dehb_population_size: 24
+```
+
+`large_budget` (deep search, >= 10k evals):
+
+```yaml
+optimiser:
+	name: nevergrad
+	nevergrad_algorithm: NGOpt
+	budget: 10000
+	seed: 42
+	nevergrad_num_workers: 4
+```
+
+For heavily conditional spaces, start with `tpe` and `dehb(native/auto)`; use Nevergrad for broad global exploration and diversity across seeds.
 
 Example config snippets:
 

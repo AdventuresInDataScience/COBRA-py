@@ -101,9 +101,22 @@ def run(data_path: str, config_path: str | None, output_path: str | None, object
             budget_n,
             seed=seed_n,
             optimiser_name=str(cfg["optimiser"].get("nevergrad_algorithm", "NGOpt")),
+            num_workers=int(cfg["optimiser"].get("nevergrad_num_workers", 1)),
         )
     elif opt_name == "tpe":
-        result = run_tpe(cache, train, cs, obj_cfg, bt_cfg, budget_n, seed=seed_n)
+        result = run_tpe(
+            cache,
+            train,
+            cs,
+            obj_cfg,
+            bt_cfg,
+            budget_n,
+            seed=seed_n,
+            multivariate=bool(cfg["optimiser"].get("tpe_multivariate", True)),
+            group=bool(cfg["optimiser"].get("tpe_group", True)),
+            n_startup_trials=int(cfg["optimiser"].get("tpe_n_startup_trials", 20)),
+            constant_liar=bool(cfg["optimiser"].get("tpe_constant_liar", False)),
+        )
     else:
         if opt_name != "dehb":
             raise click.ClickException("Unknown optimiser. Use one of: dehb, nevergrad, tpe")
@@ -115,6 +128,9 @@ def run(data_path: str, config_path: str | None, output_path: str | None, object
             bt_cfg,
             budget_n,
             seed=seed_n,
+            mutation_factor=float(cfg["optimiser"].get("dehb_mutation_factor", 0.8)),
+            crossover_rate=float(cfg["optimiser"].get("dehb_crossover_rate", 0.7)),
+            population_size=int(cfg["optimiser"].get("dehb_population_size", 24)),
             dehb_backend=str(cfg["optimiser"].get("dehb_backend", "auto")),
             min_fidelity=float(cfg["optimiser"].get("min_fidelity", 0.2)),
             max_fidelity=float(cfg["optimiser"].get("max_fidelity", 1.0)),
@@ -132,14 +148,44 @@ def run(data_path: str, config_path: str | None, output_path: str | None, object
                 seed=seed_n,
                 backtest_config=bt_cfg,
             )
+            fold_budget = max(20, budget_n // 5)
+            if opt_name == "nevergrad":
+                return run_nevergrad(
+                    fold_cache,
+                    train_df,
+                    fold_cs,
+                    obj_cfg,
+                    bt_cfg,
+                    fold_budget,
+                    seed=seed_n,
+                    optimiser_name=str(cfg["optimiser"].get("nevergrad_algorithm", "NGOpt")),
+                    num_workers=int(cfg["optimiser"].get("nevergrad_num_workers", 1)),
+                )
+            if opt_name == "tpe":
+                return run_tpe(
+                    fold_cache,
+                    train_df,
+                    fold_cs,
+                    obj_cfg,
+                    bt_cfg,
+                    fold_budget,
+                    seed=seed_n,
+                    multivariate=bool(cfg["optimiser"].get("tpe_multivariate", True)),
+                    group=bool(cfg["optimiser"].get("tpe_group", True)),
+                    n_startup_trials=int(cfg["optimiser"].get("tpe_n_startup_trials", 20)),
+                    constant_liar=bool(cfg["optimiser"].get("tpe_constant_liar", False)),
+                )
             return run_dehb(
                 fold_cache,
                 train_df,
                 fold_cs,
                 obj_cfg,
                 bt_cfg,
-                max(20, budget_n // 5),
+                fold_budget,
                 seed=seed_n,
+                mutation_factor=float(cfg["optimiser"].get("dehb_mutation_factor", 0.8)),
+                crossover_rate=float(cfg["optimiser"].get("dehb_crossover_rate", 0.7)),
+                population_size=int(cfg["optimiser"].get("dehb_population_size", 24)),
                 dehb_backend=str(cfg["optimiser"].get("dehb_backend", "auto")),
                 min_fidelity=float(cfg["optimiser"].get("min_fidelity", 0.2)),
                 max_fidelity=float(cfg["optimiser"].get("max_fidelity", 1.0)),

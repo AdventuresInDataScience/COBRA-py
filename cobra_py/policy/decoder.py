@@ -7,51 +7,88 @@ from cobra_py.indicators.cache import IndicatorCache
 from .schema import Policy, RuleConfig, SLConfig, TPConfig
 
 
-def _decode_rule(prefix: str, config: dict[str, Any], cache: IndicatorCache) -> RuleConfig | None:
-    indicator = config.get(f"{prefix}_indicator", "rsi")
-    archetype = config.get(f"{prefix}_archetype", "comparison")
-    operator = config.get(f"{prefix}_operator", ">")
-
+def _indicator_params_output(prefix: str, indicator: str, config: dict[str, Any]) -> tuple[tuple, str]:
     if indicator == "rsi":
-        params = (int(config.get(f"{prefix}_rsi_period", 14)),)
-        output = "rsi"
-    elif indicator in {"sma", "ema", "wma"}:
-        params = (int(config.get(f"{prefix}_{indicator}_period", 20)),)
-        output = "ma"
-    elif indicator == "atr":
-        params = (int(config.get(f"{prefix}_atr_period", 14)),)
-        output = "atr"
-    elif indicator == "bb":
+        return (int(config.get(f"{prefix}_rsi_period", 14)),), "rsi"
+    if indicator in {"sma", "ema", "wma"}:
+        return (int(config.get(f"{prefix}_{indicator}_period", 20)),), "ma"
+    if indicator == "atr":
+        return (int(config.get(f"{prefix}_atr_period", 14)),), "atr"
+    if indicator == "bb":
         params = (
             int(config.get(f"{prefix}_bb_period", 20)),
             float(config.get(f"{prefix}_bb_std", 2.0)),
             str(config.get(f"{prefix}_bb_matype", "sma")),
         )
-        output = str(config.get(f"{prefix}_bb_output", "middle"))
-    elif indicator == "macd":
+        return params, str(config.get(f"{prefix}_bb_output", "middle"))
+    if indicator == "macd":
         params = (
             int(config.get(f"{prefix}_macd_fast", 12)),
             int(config.get(f"{prefix}_macd_slow", 26)),
             int(config.get(f"{prefix}_macd_signal", 9)),
         )
-        output = str(config.get(f"{prefix}_macd_output", "macd"))
-    else:
-        # fallback for indicators with period and single output
-        params = (int(config.get(f"{prefix}_{indicator}_period", 14)),)
-        output = str(config.get(f"{prefix}_output", "ma"))
+        return params, str(config.get(f"{prefix}_macd_output", "macd"))
+    if indicator == "keltner":
+        params = (
+            int(config.get(f"{prefix}_keltner_ema_period", 20)),
+            int(config.get(f"{prefix}_keltner_atr_period", 14)),
+            float(config.get(f"{prefix}_keltner_mult", 2.0)),
+        )
+        return params, str(config.get(f"{prefix}_keltner_output", "upper"))
+    if indicator == "donchian":
+        params = (int(config.get(f"{prefix}_donchian_period", 20)),)
+        return params, str(config.get(f"{prefix}_donchian_output", "upper"))
+    if indicator == "adx":
+        return (int(config.get(f"{prefix}_adx_period", 14)),), "adx"
+    if indicator == "stoch":
+        params = (
+            int(config.get(f"{prefix}_stoch_k", 14)),
+            int(config.get(f"{prefix}_stoch_d", 3)),
+            int(config.get(f"{prefix}_stoch_smooth", 3)),
+        )
+        return params, str(config.get(f"{prefix}_stoch_output", "k"))
+    if indicator == "psar":
+        params = (
+            float(config.get(f"{prefix}_psar_step", 0.02)),
+            float(config.get(f"{prefix}_psar_max_step", 0.2)),
+        )
+        return params, "psar"
+    if indicator == "cci":
+        return (int(config.get(f"{prefix}_cci_period", 14)),), "cci"
+    if indicator == "roc":
+        return (int(config.get(f"{prefix}_roc_period", 10)),), "roc"
+    if indicator == "obv":
+        return (), "obv"
+    if indicator == "vwap":
+        return (), "vwap"
 
-    if cache.get(indicator, params, output) is None and archetype != "band_test":
+    params = (int(config.get(f"{prefix}_{indicator}_period", 14)),)
+    return params, str(config.get(f"{prefix}_output", "ma"))
+
+
+def _decode_rule(prefix: str, config: dict[str, Any], cache: IndicatorCache) -> RuleConfig | None:
+    indicator = config.get(f"{prefix}_indicator", "rsi")
+    archetype = config.get(f"{prefix}_archetype", "comparison")
+    operator = config.get(f"{prefix}_operator", ">")
+
+    params, output = _indicator_params_output(prefix, indicator, config)
+    band_side = str(config.get(f"{prefix}_band_side", output))
+
+    required_output = band_side if archetype == "band_test" else output
+    if cache.get(indicator, params, required_output) is None:
         return None
 
     threshold = float(config.get(f"{prefix}_threshold", 50.0))
-    comparand = config.get(f"{prefix}_comparand", threshold)
-    if isinstance(comparand, str) and comparand not in {"price", "indicator2"}:
-        try:
-            comparand = float(comparand)
-        except ValueError:
-            comparand = threshold
+    comparand_mode = str(config.get(f"{prefix}_comparand_mode", "price")).lower()
+    if comparand_mode == "threshold":
+        comparand: str | float = threshold
+    elif comparand_mode == "indicator2":
+        comparand = "indicator2"
+    else:
+        comparand = "price"
 
     lookback = int(config.get(f"{prefix}_lookback", 20))
+    group_id = int(config.get(f"{prefix}_group_id", 0))
 
     return RuleConfig(
         archetype=archetype,
@@ -64,7 +101,8 @@ def _decode_rule(prefix: str, config: dict[str, Any], cache: IndicatorCache) -> 
         params2=config.get(f"{prefix}_params2"),
         output2=config.get(f"{prefix}_output2"),
         lookback=lookback,
-        band_side=config.get(f"{prefix}_band_side"),
+        band_side=band_side,
+        group_id=group_id,
     )
 
 
@@ -127,5 +165,7 @@ def decode_config(config: dict[str, Any], cache: IndicatorCache) -> Policy | Non
         tp_config=TPConfig(tp_type=tp_type, params=tp_params),
         n_active_entry=len(entry_rules),
         n_active_exit=len(exit_rules),
+        entry_logic=str(config.get("entry_logic", "and")).lower(),
+        exit_logic=str(config.get("exit_logic", "or")).lower(),
     )
 

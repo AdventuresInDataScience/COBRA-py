@@ -53,3 +53,15 @@ def test_composite_weights_must_be_finite():
     with pytest.raises(ValueError, match="finite"):
         compute_objective(metrics, POLICY_SMALL, {"objective": "composite", "composite_weights": [0.6, 0.4, float("nan"), 0.1]})
 
+
+def test_cagr_objective_prefers_higher_cagr():
+    hi = {"cagr": 0.22, "n_trades": 20}
+    lo = {"cagr": 0.08, "n_trades": 20}
+    assert compute_objective(hi, POLICY_SMALL, {"objective": "cagr"}) < compute_objective(lo, POLICY_SMALL, {"objective": "cagr"})
+
+
+def test_car_mdd_objective_prefers_higher_ratio():
+    hi = {"car_mdd_ratio": 1.8, "n_trades": 20}
+    lo = {"car_mdd_ratio": 0.6, "n_trades": 20}
+    assert compute_objective(hi, POLICY_SMALL, {"objective": "car_mdd"}) < compute_objective(lo, POLICY_SMALL, {"objective": "car_mdd"})
+

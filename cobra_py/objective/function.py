@@ -28,11 +28,18 @@ def compute_objective(metrics: dict[str, float], policy: Policy, config: dict[st
         raw = -float(metrics.get("sharpe_ratio", -999.0))
     elif objective_key == "calmar":
         raw = -float(metrics.get("calmar_ratio", -999.0))
+    elif objective_key == "car_mdd":
+        raw = -float(metrics.get("car_mdd_ratio", -999.0))
+    elif objective_key == "cagr":
+        raw = -float(metrics.get("cagr", -999.0))
     elif objective_key == "sortino":
         raw = -float(metrics.get("sortino_ratio", -999.0))
     elif objective_key == "ulcer":
         # Ulcer index is a downside-risk metric where lower values are better.
-        raw = float(metrics.get("ulcer_index", 999.0))
+        ulcer = float(metrics.get("ulcer_index", 999.0))
+        if ulcer < 0:
+            return 999.0
+        raw = ulcer
     elif objective_key == "max_return":
         raw = -float(metrics.get("total_return", -999.0))
     elif objective_key == "max_return_dd_cap":

@@ -89,3 +89,19 @@ def test_space_uses_indicator_aware_comparand_logic():
     assert sample["entry_0_indicator"] == "sma"
     assert sample["entry_0_comparand"] == "price"
 
+
+def test_space_exposes_logic_options_and_broader_indicators():
+    cs = build_config_space(1, 1, DEFAULT_REGISTRY, seed=42)
+    sample = cs.sample_configuration()
+
+    assert sample["entry_logic"] in {"and", "or", "dnf"}
+    assert sample["exit_logic"] in {"and", "or", "dnf"}
+    assert "keltner" in {ind.name for ind in DEFAULT_REGISTRY}
+
+
+def test_space_operator_choices_include_equality():
+    cs = build_config_space(1, 1, DEFAULT_REGISTRY, seed=123)
+    op_dims = [d for d in cs._dims if d.get("name", "").endswith("_operator")]  # noqa: SLF001
+    assert op_dims
+    assert all("==" in d.get("choices", []) for d in op_dims)
+

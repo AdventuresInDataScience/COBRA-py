@@ -1,8 +1,9 @@
 Entry conditions (ALL must be true simultaneously):
-  Rule 1: macd(12, 24, 12) > price
+  Rule 1: sma(8,) crosses_above price
+  Rule 2: sma(8,) < price
 
 Exit conditions:
-  Rule 1: bb(20, 2.5, 'ema') crosses_below 54.84803041401366
+  (none - exits driven by stop-loss and take-profit only)
 
-Stop-loss: bb_lower (20, 2.0, 'sma')
-Take-profit: atr_mult (4.562575840917856, 10)
+Stop-loss: atr_mult (1.25, 7)
+Take-profit: atr_mult (1.25, 10)

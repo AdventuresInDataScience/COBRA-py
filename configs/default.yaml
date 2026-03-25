@@ -52,7 +52,9 @@ backtest:
   freq: '1D'
 
 objective:
-  # Options: sharpe, calmar, sortino, ulcer, max_return, max_return_dd_cap, composite.
+  # Options: sharpe, calmar, car_mdd, cagr, sortino, ulcer, max_return, max_return_dd_cap, composite.
+  # calmar = trailing 3-year CAGR / trailing 3-year max drawdown.
+  # car_mdd = full-period CAGR / full-period max drawdown.
   name: 'sharpe'
   # Used only when name: max_return_dd_cap (0.20 = max 20% drawdown).
   max_drawdown_cap: 0.10
@@ -83,7 +85,7 @@ optimiser:
   # Only used when name: nevergrad.
   nevergrad_algorithm: 'NGOpt'
   # Optimization budget as number of objective evaluations.
-  budget: 10000
+  budget: 100
   seed: 42
   # Fidelity controls used by native DEHB backend.
   # These act as train-data fractions during low/high-fidelity evaluations.
@@ -91,6 +93,17 @@ optimiser:
   max_fidelity: 1.0
   # Native DEHB worker count. Ignored by seed_de backend.
   n_workers: 1
+  # Seed-DE surrogate evolution controls (used when dehb_backend: seed_de).
+  dehb_mutation_factor: 0.8
+  dehb_crossover_rate: 0.7
+  dehb_population_size: 24
+  # Nevergrad parallel worker setting (if supported by selected algorithm).
+  nevergrad_num_workers: 1
+  # TPE sampler controls for conditional-space efficiency.
+  tpe_multivariate: true
+  tpe_group: true
+  tpe_n_startup_trials: 20
+  tpe_constant_liar: false
 
 validation:
   walk_forward: true

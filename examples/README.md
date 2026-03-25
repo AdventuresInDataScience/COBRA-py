@@ -68,3 +68,12 @@ uv run python examples/spy_showcase.py
 - Use `helper_summary.csv` for broader metric columns across runs.
 - Compare low/high fee scenarios to understand strategy robustness to trading costs.
 - Compare `best_metric_value` and `best_score` together: `best_score` is minimized, while `best_metric_value` is the human-readable target metric.
+
+## Optimiser Tuning Notes
+
+The examples are intentionally high-budget. For faster local iterations:
+
+- Lower `optimiser.budget` first.
+- For `tpe`, prefer `tpe_multivariate: true` and `tpe_group: true` on conditional spaces.
+- For `dehb` seed-DE backend, tune `dehb_population_size`, `dehb_mutation_factor`, and `dehb_crossover_rate`.
+- For `nevergrad`, set `nevergrad_num_workers` > 1 when parallel resources are available.

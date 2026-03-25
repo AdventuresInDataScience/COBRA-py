@@ -85,6 +85,32 @@ def _build_eval_fn(cache: IndicatorCache, data: pd.DataFrame, config_space, obj_
     return evaluate_seed, sample_cfg
 
 
+def _build_eval_cfg_fn(cache: IndicatorCache, data: pd.DataFrame, obj_config: dict[str, Any], backtest_config: dict[str, Any]):
+    def evaluate_cfg(cfg: dict[str, Any], fidelity: float | None = None) -> tuple[float, Any, dict[str, Any], dict[str, Any]]:
+        cfg = dict(cfg)
+        cfg["n_entry_rules"] = int(obj_config.get("n_entry_rules", 3))
+        cfg["n_exit_rules"] = int(obj_config.get("n_exit_rules", 1))
+
+        policy = decode_config(cfg, cache)
+        if policy is None:
+            score = 999.0
+            metrics = {"n_trades": 0}
+        else:
+            eval_bt_cfg = dict(backtest_config)
+            if "leverage" in cfg:
+                eval_bt_cfg["leverage"] = float(cfg["leverage"])
+            if "borrow_cost_rate" in cfg:
+                eval_bt_cfg["borrow_cost_rate"] = float(cfg["borrow_cost_rate"])
+
+            eval_data = _subset_by_fidelity(data, fidelity)
+            metrics = run_backtest(policy, cache, eval_data, eval_bt_cfg)
+            score = compute_objective(metrics, policy, obj_config)
+
+        return float(score), policy, metrics, cfg
+
+    return evaluate_cfg
+
+
 def _run_seed_de_backend(
     cache: IndicatorCache,
     data: pd.DataFrame,
@@ -100,7 +126,7 @@ def _run_seed_de_backend(
     start = time.time()
     history: list[dict] = []
     rng = random.Random(seed)
-    evaluate_seed, sample_cfg = _build_eval_fn(cache, data, config_space, obj_config, backtest_config)
+    evaluate_cfg = _build_eval_cfg_fn(cache, data, obj_config, backtest_config)
 
     best_score = float("inf")
     best_policy = None
@@ -108,21 +134,29 @@ def _run_seed_de_backend(
 
     n_eval = int(max(1, budget))
 
-    # Differential-evolution style search over deterministic config seeds.
+    # Differential-evolution style search over full parameter vectors.
     pop_size = int(max(4, min(population_size, n_eval)))
-    population = [rng.randint(0, _MAX_SEED) for _ in range(pop_size)]
+    if hasattr(config_space, "sample_vector"):
+        population = [config_space.sample_vector(rng) for _ in range(pop_size)]
+    else:
+        population = [[rng.randint(0, _MAX_SEED)] for _ in range(pop_size)]
     population_scores = [999.0 for _ in range(pop_size)]
 
     evaluations = 0
     for i in range(pop_size):
-        score, policy, metrics, cfg = evaluate_seed(population[i])
+        if hasattr(config_space, "vector_to_config"):
+            cfg = config_space.vector_to_config(population[i])
+        else:
+            sample_seed = int(population[i][0])
+            _, sample_cfg = _build_eval_fn(cache, data, config_space, obj_config, backtest_config)
+            cfg = sample_cfg(sample_seed)
+        score, policy, metrics, cfg = evaluate_cfg(cfg)
         population_scores[i] = score
         history.append(
             {
                 "config": cfg,
                 "score": score,
                 "metrics": metrics,
-                "sample_seed": int(population[i]),
                 "stage": "init",
             }
         )
@@ -139,14 +173,23 @@ def _run_seed_de_backend(
 
             pool = [idx for idx in range(pop_size) if idx != i]
             a, b, c = rng.sample(pool, 3) if len(pool) >= 3 else (i, i, i)
-            mutant = int(round(population[a] + float(mutation_factor) * (population[b] - population[c])))
-            mutant = _clamp_seed(mutant)
-            trial_seed = mutant if rng.random() < float(crossover_rate) else int(population[i])
+            if hasattr(config_space, "sample_vector"):
+                mutant: list[float] = []
+                for d in range(len(population[i])):
+                    v = population[a][d] + float(mutation_factor) * (population[b][d] - population[c][d])
+                    mutant.append(float(v))
+                trial_vec = [mutant[d] if rng.random() < float(crossover_rate) else population[i][d] for d in range(len(mutant))]
+                cfg = config_space.vector_to_config(trial_vec) if hasattr(config_space, "vector_to_config") else config_space.sample_configuration()
+            else:
+                trial_seed = int(_clamp_seed(round(population[a][0] + float(mutation_factor) * (population[b][0] - population[c][0]))))
+                _, sample_cfg = _build_eval_fn(cache, data, config_space, obj_config, backtest_config)
+                cfg = sample_cfg(trial_seed)
+                trial_vec = [float(trial_seed)]
 
-            score, policy, metrics, cfg = evaluate_seed(trial_seed)
+            score, policy, metrics, cfg = evaluate_cfg(cfg)
             accepted = score <= population_scores[i]
             if accepted:
-                population[i] = trial_seed
+                population[i] = trial_vec
                 population_scores[i] = score
 
             history.append(
@@ -154,7 +197,6 @@ def _run_seed_de_backend(
                     "config": cfg,
                     "score": score,
                     "metrics": metrics,
-                    "sample_seed": int(trial_seed),
                     "stage": "evolve",
                     "accepted": bool(accepted),
                 }
@@ -167,14 +209,16 @@ def _run_seed_de_backend(
                 best_metrics = metrics
 
     if n_eval == 1 and best_policy is None:
-        score, policy, metrics, _ = evaluate_seed(seed)
+        fallback_cfg = config_space.sample_configuration() if hasattr(config_space, "sample_configuration") else {"sample_seed": seed}
+        score, policy, metrics, _ = evaluate_cfg(fallback_cfg)
         if policy is not None:
             best_score = float(score)
             best_policy = policy
             best_metrics = metrics
 
     if best_policy is None or best_metrics is None:
-        fallback = decode_config(sample_cfg(seed), cache)
+        fallback_cfg = config_space.sample_configuration() if hasattr(config_space, "sample_configuration") else {"sample_seed": seed}
+        fallback = decode_config(fallback_cfg, cache)
         if fallback is None:
             raise RuntimeError("No valid policy sampled. Increase budget or adjust search space.")
         best_policy = fallback
@@ -213,7 +257,7 @@ def _run_native_dehb_backend(
 
     start = time.time()
     history: list[dict] = []
-    evaluate_seed, sample_cfg = _build_eval_fn(cache, data, config_space, obj_config, backtest_config)
+    evaluate_cfg = _build_eval_cfg_fn(cache, data, obj_config, backtest_config)
 
     best_score = float("inf")
     best_policy = None
@@ -221,15 +265,20 @@ def _run_native_dehb_backend(
 
     def objective(config, fidelity=None, **kwargs):
         nonlocal best_score, best_policy, best_metrics
-        sample_seed = _seed_from_native_config(config)
-        score, policy, metrics, cfg = evaluate_seed(sample_seed, fidelity=float(fidelity) if fidelity is not None else None)
+        if hasattr(config_space, "vector_to_config"):
+            cfg = config_space.vector_to_config(config)
+        else:
+            sample_seed = _seed_from_native_config(config)
+            _, sample_cfg = _build_eval_fn(cache, data, config_space, obj_config, backtest_config)
+            cfg = sample_cfg(sample_seed)
+
+        score, policy, metrics, cfg = evaluate_cfg(cfg, fidelity=float(fidelity) if fidelity is not None else None)
 
         history.append(
             {
                 "config": cfg,
                 "score": score,
                 "metrics": metrics,
-                "sample_seed": int(sample_seed),
                 "stage": "native_dehb",
                 "fidelity": float(fidelity) if fidelity is not None else None,
             }
@@ -240,12 +289,12 @@ def _run_native_dehb_backend(
             best_policy = policy
             best_metrics = metrics
 
-        return {"fitness": float(score), "cost": float(fidelity) if fidelity is not None else 1.0, "info": {"sample_seed": int(sample_seed)}}
+        return {"fitness": float(score), "cost": float(fidelity) if fidelity is not None else 1.0}
 
     n_eval = int(max(1, budget))
     dehb_kwargs = {
         "f": objective,
-        "dimensions": 1,
+        "dimensions": int(getattr(config_space, "dimension_count", 1)),
         "min_fidelity": float(min_fidelity),
         "max_fidelity": float(max(max_fidelity, min_fidelity)),
         "n_workers": int(max(1, n_workers)),
@@ -260,9 +309,7 @@ def _run_native_dehb_backend(
 
     ran = False
     for kwargs in (
-        {"fevals": n_eval, "verbose": False},
         {"fevals": n_eval},
-        {"total_cost": n_eval, "verbose": False},
         {"total_cost": n_eval},
     ):
         try:
@@ -275,8 +322,12 @@ def _run_native_dehb_backend(
     if not ran:
         raise RuntimeError("Unable to run native DEHB due to unexpected API signature.")
 
+    if not history:
+        raise RuntimeError("Native DEHB completed without objective evaluations.")
+
     if best_policy is None or best_metrics is None:
-        fallback = decode_config(sample_cfg(seed), cache)
+        fallback_cfg = config_space.sample_configuration() if hasattr(config_space, "sample_configuration") else {"sample_seed": seed}
+        fallback = decode_config(fallback_cfg, cache)
         if fallback is None:
             raise RuntimeError("No valid policy sampled by native DEHB. Increase budget or adjust search space.")
         best_policy = fallback

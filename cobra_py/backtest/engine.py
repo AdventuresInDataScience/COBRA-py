@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from cobra_py.indicators.cache import IndicatorCache
-from cobra_py.policy.rules import combine_rules
+from cobra_py.policy.rules import combine_rules_with_logic
 from cobra_py.policy.schema import Policy
 from cobra_py.policy.sl_tp import compute_sl, compute_tp
 
@@ -144,8 +144,12 @@ def run_backtest(policy: Policy, cache: IndicatorCache, data: pd.DataFrame, conf
     high = data["high"].to_numpy(dtype=float)
     low = data["low"].to_numpy(dtype=float)
 
-    entry_signals = combine_rules(policy.entry_rules, cache, close)
-    exit_signals = combine_rules(policy.exit_rules, cache, close) if policy.exit_rules else np.zeros(len(close), dtype=bool)
+    entry_signals = combine_rules_with_logic(policy.entry_rules, cache, close, logic=policy.entry_logic)
+    exit_signals = (
+        combine_rules_with_logic(policy.exit_rules, cache, close, logic=policy.exit_logic)
+        if policy.exit_rules
+        else np.zeros(len(close), dtype=bool)
+    )
 
     sl_levels = compute_sl(policy.sl_config, cache, close, high, low)
     tp_levels = compute_tp(policy.tp_config, cache, close, high, sl_levels)

@@ -1,8 +1,0 @@
-Entry conditions (ALL must be true simultaneously):
-  Rule 1: atr(20,) crosses_above 88.22961617468816
-
-Exit conditions:
-  Rule 1: wma(200,) crosses_above 79.15138578027849
-
-Stop-loss: bb_lower (20, 2.0, 'sma')
-Take-profit: atr_mult (3.382819970754109, 20)

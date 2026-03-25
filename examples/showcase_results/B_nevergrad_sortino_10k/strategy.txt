@@ -1,9 +1,0 @@
-Entry conditions (ALL must be true simultaneously):
-  Rule 1: ema(25,) crosses_below price
-  Rule 2: ema(30,) > 95.28491477272954
-
-Exit conditions:
-  (none - exits driven by stop-loss and take-profit only)
-
-Stop-loss: pct (0.011994265607720891,)
-Take-profit: atr_mult (5.206035246200226, 14)

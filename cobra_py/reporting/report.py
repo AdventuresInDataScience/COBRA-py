@@ -15,6 +15,8 @@ from cobra_py.validation.walk_forward import WalkForwardResult
 OBJECTIVE_TO_METRIC = {
     "sharpe": ("sharpe_ratio", "Sharpe ratio"),
     "calmar": ("calmar_ratio", "Calmar ratio"),
+    "car_mdd": ("car_mdd_ratio", "CAR/MDD ratio"),
+    "cagr": ("cagr", "CAGR"),
     "sortino": ("sortino_ratio", "Sortino ratio"),
     "ulcer": ("ulcer_index", "Ulcer index"),
     "max_return": ("total_return", "Total return"),
@@ -36,20 +38,56 @@ def _as_serialisable(value: Any) -> Any:
     return value
 
 
+def _logic_caption(logic: str, section: str) -> str:
+    key = str(logic).strip().lower()
+    if key == "or":
+        return f"{section} conditions (logic: OR, any rule can trigger):"
+    if key == "dnf":
+        return f"{section} conditions (logic: DNF, OR across group-wise AND clauses):"
+    return f"{section} conditions (logic: AND, all rules must be true):"
+
+
+def _rule_series_name(rule) -> str:
+    # Band tests reference a selected band side; other archetypes use the configured output line.
+    output = (rule.band_side if rule.archetype == "band_test" else rule.output) or "value"
+    return f"{rule.indicator}{rule.params}.{output}"
+
+
+def _format_comparand(rule) -> str:
+    if isinstance(rule.comparand, (int, float)):
+        return str(float(rule.comparand))
+    if rule.comparand == "price":
+        return "price"
+    if rule.comparand == "indicator2" and rule.indicator2:
+        rhs_output = rule.output2 or "value"
+        rhs_params = rule.params2 if rule.params2 is not None else ()
+        return f"{rule.indicator2}{rhs_params}.{rhs_output}"
+    return str(rule.comparand)
+
+
+def _format_rule(rule, idx: int, logic: str) -> str:
+    lhs = _rule_series_name(rule)
+    rhs = _format_comparand(rule)
+    group_suffix = ""
+    if str(logic).strip().lower() == "dnf":
+        group_suffix = f" [group {int(rule.group_id or 0)}]"
+    return f"  Rule {idx}:{group_suffix} {lhs} {rule.operator} {rhs}"
+
+
 def policy_to_human_readable(policy) -> str:
     lines = []
-    lines.append("Entry conditions (ALL must be true simultaneously):")
+    lines.append(_logic_caption(getattr(policy, "entry_logic", "and"), "Entry"))
     if policy.entry_rules:
         for i, r in enumerate(policy.entry_rules, start=1):
-            lines.append(f"  Rule {i}: {r.indicator}{r.params} {r.operator} {r.comparand}")
+            lines.append(_format_rule(r, i, getattr(policy, "entry_logic", "and")))
     else:
         lines.append("  (none)")
 
     lines.append("")
-    lines.append("Exit conditions:")
+    lines.append(_logic_caption(getattr(policy, "exit_logic", "or"), "Exit"))
     if policy.exit_rules:
         for i, r in enumerate(policy.exit_rules, start=1):
-            lines.append(f"  Rule {i}: {r.indicator}{r.params} {r.operator} {r.comparand}")
+            lines.append(_format_rule(r, i, getattr(policy, "exit_logic", "or")))
     else:
         lines.append("  (none - exits driven by stop-loss and take-profit only)")
 

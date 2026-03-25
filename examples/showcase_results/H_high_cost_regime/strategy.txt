@@ -1,8 +1,0 @@
-Entry conditions (ALL must be true simultaneously):
-  Rule 1: sma(5,) crosses_below 65.58195285054799
-
-Exit conditions:
-  Rule 1: wma(50,) crosses_below price
-
-Stop-loss: pct (0.0802426830301638,)
-Take-profit: swing_high (27,)

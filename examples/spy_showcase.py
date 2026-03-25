@@ -1,6 +1,7 @@
 ﻿# %% 1. Setup: imports and paths
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -33,7 +34,8 @@ print("Showcase dir:", showcase_dir)
 
 # %% 2. Load config and data
 base_cfg = load_config(project_root / "configs" / "default.yaml")
-base_cfg["optimiser"]["budget"] = max(10000, int(base_cfg["optimiser"].get("budget", 10000)))
+showcase_budget = int(os.getenv("COBRA_EXAMPLE_BUDGET", str(base_cfg["optimiser"].get("budget", 100))))
+base_cfg["optimiser"]["budget"] = max(10, showcase_budget)
 base_cfg["indicators"]["n_jobs"] = 1
 
 spy = fetch_yfinance_ohlcv("SPY", start="1996-01-01", interval="1d")
@@ -43,58 +45,62 @@ print("SPY rows:", len(spy), "date range:", spy.index.min().date(), "to", spy.in
 def compute_perf(equity_curve: np.ndarray) -> dict[str, float]:
     eq = np.asarray(equity_curve, dtype=float)
     if len(eq) < 2:
-        return {"total_return": -999.0, "sharpe": -999.0, "max_drawdown": -999.0}
+        return {"total_return": -999.0, "cagr": -999.0, "sharpe": -999.0, "max_drawdown": -999.0}
 
     rets = np.diff(eq) / np.maximum(eq[:-1], 1e-12)
     total_return = float(eq[-1] / max(eq[0], 1e-12) - 1.0)
+    years = max((len(eq) - 1) / 252.0, 1e-12)
+    cagr = float((eq[-1] / max(eq[0], 1e-12)) ** (1.0 / years) - 1.0) if eq[-1] > 0.0 and eq[0] > 0.0 else -1.0
     sharpe = float((rets.mean() / (rets.std(ddof=0) + 1e-12)) * np.sqrt(252.0))
     peak = np.maximum.accumulate(eq)
     dd = eq / np.maximum(peak, 1e-12) - 1.0
     max_dd = float(dd.min())
-    return {"total_return": total_return, "sharpe": sharpe, "max_drawdown": max_dd}
+    return {"total_return": total_return, "cagr": cagr, "sharpe": sharpe, "max_drawdown": max_dd}
 
 
-# %% 3. Scenario matrix: diverse optimisers, objectives, and cost assumptions
+# %% 3. Scenario matrix: diverse optimisers/objectives with costs integrated per scenario
 scenarios: list[dict] = [
     {
-        "name": "A_dehb_sharpe_10k",
+        "name": f"A_dehb_sharpe_b{showcase_budget}",
         "overrides": {
-            "optimiser": {"name": "dehb", "budget": 10000, "seed": 42},
+            "optimiser": {"name": "dehb", "budget": showcase_budget, "seed": 42},
             "objective": {"name": "sharpe", "min_trades": 1},
         },
     },
     {
-        "name": "B_nevergrad_sortino_10k",
+        "name": f"B_nevergrad_sortino_low_cost_b{showcase_budget}",
         "overrides": {
-            "optimiser": {"name": "nevergrad", "budget": 10000, "seed": 42},
+            "optimiser": {"name": "nevergrad", "budget": showcase_budget, "seed": 42},
             "objective": {"name": "sortino", "min_trades": 1},
+            "backtest": {"fee_rate": 0.0002, "slippage": 0.0001},
         },
     },
     {
-        "name": "C_dehb_max_return_10k",
+        "name": f"C_dehb_max_return_high_cost_b{showcase_budget}",
         "overrides": {
-            "optimiser": {"name": "dehb", "budget": 10000, "seed": 42},
+            "optimiser": {"name": "dehb", "budget": showcase_budget, "seed": 42},
             "objective": {"name": "max_return", "min_trades": 1},
+            "backtest": {"fee_rate": 0.0020, "slippage": 0.0010},
         },
     },
     {
-        "name": "D_dehb_max_return_dd20_10k",
+        "name": f"D_dehb_max_return_dd20_b{showcase_budget}",
         "overrides": {
-            "optimiser": {"name": "dehb", "budget": 10000, "seed": 42},
+            "optimiser": {"name": "dehb", "budget": showcase_budget, "seed": 42},
             "objective": {"name": "max_return_dd_cap", "max_drawdown_cap": 0.20, "min_trades": 1},
         },
     },
     {
-        "name": "E_tpe_ulcer_10k",
+        "name": f"E_tpe_ulcer_b{showcase_budget}",
         "overrides": {
-            "optimiser": {"name": "tpe", "budget": 10000, "seed": 42},
+            "optimiser": {"name": "tpe", "budget": showcase_budget, "seed": 42},
             "objective": {"name": "ulcer", "min_trades": 1},
         },
     },
     {
-        "name": "F_dehb_composite_10k",
+        "name": f"F_dehb_composite_b{showcase_budget}",
         "overrides": {
-            "optimiser": {"name": "dehb", "budget": 10000, "seed": 123},
+            "optimiser": {"name": "dehb", "budget": showcase_budget, "seed": 123},
             "objective": {
                 "name": "composite",
                 "composite_weights": [0.40, 0.30, 0.20, 0.10],
@@ -104,17 +110,17 @@ scenarios: list[dict] = [
         },
     },
     {
-        "name": "G_low_cost_regime",
+        "name": f"G_tpe_cagr_low_cost_b{showcase_budget}",
         "overrides": {
-            "optimiser": {"name": "tpe", "budget": 10000, "seed": 7},
-            "objective": {"name": "calmar", "min_trades": 1},
+            "optimiser": {"name": "tpe", "budget": showcase_budget, "seed": 7},
+            "objective": {"name": "cagr", "min_trades": 1},
             "backtest": {"fee_rate": 0.0002, "slippage": 0.0001},
         },
     },
     {
-        "name": "H_high_cost_regime",
+        "name": f"H_nevergrad_calmar_high_cost_b{showcase_budget}",
         "overrides": {
-            "optimiser": {"name": "nevergrad", "budget": 10000, "seed": 7},
+            "optimiser": {"name": "nevergrad", "budget": showcase_budget, "seed": 7},
             "objective": {"name": "calmar", "min_trades": 1},
             "backtest": {"fee_rate": 0.0020, "slippage": 0.0010},
         },
@@ -122,7 +128,7 @@ scenarios: list[dict] = [
     {
         "name": "I_indicator_subset",
         "overrides": {
-            "optimiser": {"name": "dehb", "budget": 10000, "seed": 99},
+            "optimiser": {"name": "dehb", "budget": showcase_budget, "seed": 99},
             "objective": {"name": "sharpe", "min_trades": 1},
             "indicators": {
                 "include": ["sma", "ema", "rsi", "macd", "bb", "atr"],
@@ -133,7 +139,7 @@ scenarios: list[dict] = [
     {
         "name": "J_leverage2_dd20_with_borrow",
         "overrides": {
-            "optimiser": {"name": "dehb", "budget": 10000, "seed": 21},
+            "optimiser": {"name": "dehb", "budget": showcase_budget, "seed": 21},
             "objective": {"name": "max_return_dd_cap", "max_drawdown_cap": 0.20, "min_trades": 1},
             "backtest": {"leverage": 2.0, "borrow_cost_rate": 0.06},
         },
@@ -198,10 +204,13 @@ for scenario in scenarios:
             "best_score": summary.get("best_score"),
             "evals": summary.get("n_evaluations"),
             "strategy_total_return": strategy_perf["total_return"],
+            "strategy_cagr": strategy_perf["cagr"],
             "strategy_sharpe": strategy_perf["sharpe"],
             "buyhold_total_return": bh_perf["total_return"],
+            "buyhold_cagr": bh_perf["cagr"],
             "buyhold_sharpe": bh_perf["sharpe"],
             "oos_total_return": oos.get("total_return"),
+            "oos_cagr": oos.get("cagr"),
             "oos_sharpe": oos.get("sharpe_ratio"),
             "oos_max_drawdown": oos.get("max_drawdown"),
         }
@@ -241,7 +250,7 @@ bh_norm = bh / max(bh[0], 1e-12)
 bh_idx = run_curves[first_key]["index"][: len(bh_norm)]
 ax_eq.plot(bh_idx, bh_norm, color="black", linestyle="--", linewidth=2.2, label="Buy & Hold baseline")
 
-ax_eq.set_title("SPY showcase: date-based normalized equity (1996+)")
+ax_eq.set_title(f"SPY showcase: date-based normalized equity (1996+, budget={showcase_budget})")
 ax_eq.set_xlabel("Date")
 ax_eq.set_ylabel("Normalized equity")
 ax_eq.grid(alpha=0.25)
@@ -266,12 +275,12 @@ axes[0].set_ylabel("Total return")
 axes[0].grid(axis="y", alpha=0.25)
 axes[0].legend()
 
-axes[1].bar(x - width / 2, scenario_summary["strategy_sharpe"], width, label="Strategy")
-axes[1].bar(x + width / 2, scenario_summary["buyhold_sharpe"], width, label="Buy & Hold")
+axes[1].bar(x - width / 2, scenario_summary["strategy_cagr"], width, label="Strategy")
+axes[1].bar(x + width / 2, scenario_summary["buyhold_cagr"], width, label="Buy & Hold")
 axes[1].set_xticks(x)
 axes[1].set_xticklabels(scenario_summary["scenario"], rotation=35, ha="right")
-axes[1].set_title("Sharpe: strategy vs buy-and-hold")
-axes[1].set_ylabel("Sharpe")
+axes[1].set_title("CAGR: strategy vs buy-and-hold")
+axes[1].set_ylabel("CAGR")
 axes[1].grid(axis="y", alpha=0.25)
 axes[1].legend()
 
@@ -283,8 +292,9 @@ print("Saved:", bars_png)
 
 # %% 8. CLI equivalents
 print("\nCLI equivalents from project root:")
-print("uv run cobra-py run --data <your_csv> --config configs/default.yaml --budget 10000")
-print("uv run cobra-py run --data <your_csv> --objective sortino --budget 10000 --seed 42")
-print("uv run cobra-py run --data <your_csv> --objective ulcer --budget 10000 --seed 42")
-print("uv run cobra-py run --data <your_csv> --objective max_return --budget 10000 --seed 42")
+print(f"uv run cobra-py run --data <your_csv> --config configs/default.yaml --budget {showcase_budget}")
+print(f"uv run cobra-py run --data <your_csv> --objective sortino --budget {showcase_budget} --seed 42")
+print(f"uv run cobra-py run --data <your_csv> --objective cagr --budget {showcase_budget} --seed 7")
+print(f"uv run cobra-py run --data <your_csv> --objective ulcer --budget {showcase_budget} --seed 42")
+print(f"uv run cobra-py run --data <your_csv> --objective max_return --budget {showcase_budget} --seed 42")
 

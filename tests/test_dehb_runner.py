@@ -36,3 +36,5 @@ def test_dehb_auto_backend_returns_result(sample_ohlcv_data, small_cache):
 
     assert result.n_evaluations >= 1
     assert result.optimiser_name in {"dehb(native)", "dehb(seed-de-mvp)"}
+    assert result.full_history
+    assert "entry_logic" in result.full_history[0]["config"]

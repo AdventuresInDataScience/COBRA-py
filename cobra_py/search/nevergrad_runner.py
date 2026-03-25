@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 import pandas as pd
+import numpy as np
 
 from cobra_py.backtest.engine import run_backtest
 from cobra_py.indicators.cache import IndicatorCache
@@ -21,6 +22,7 @@ def run_nevergrad(
     budget: int,
     seed: int = 42,
     optimiser_name: str = "NGOpt",
+    num_workers: int = 1,
 ) -> OptimisationResult:
     try:
         import nevergrad as ng
@@ -34,15 +36,23 @@ def run_nevergrad(
     best_metrics = None
 
     n_eval = int(max(1, budget))
-    parametrization = ng.p.Scalar(lower=0, upper=2_147_483_647).set_integer_casting()
+    if hasattr(config_space, "get_nevergrad_parametrization"):
+        parametrization = config_space.get_nevergrad_parametrization()
+    else:
+        parametrization = ng.p.Scalar(lower=0, upper=2_147_483_647).set_integer_casting()
     optimiser_key = str(optimiser_name).strip()
     optimiser_cls = getattr(ng.optimizers, optimiser_key, None)
     if optimiser_cls is None:
         raise ValueError(f"Unknown nevergrad optimizer '{optimiser_key}'.")
     try:
-        optimizer = optimiser_cls(parametrization=parametrization, budget=n_eval, num_workers=1)
+        optimizer = optimiser_cls(parametrization=parametrization, budget=n_eval, num_workers=int(max(1, num_workers)))
     except TypeError:
         optimizer = optimiser_cls(parametrization=parametrization, budget=n_eval)
+
+    try:
+        optimizer.parametrization.random_state = np.random.RandomState(seed)
+    except Exception:
+        pass
 
     def sample_cfg(sample_seed: int) -> dict[str, Any]:
         if hasattr(config_space, "sample_with_seed"):
@@ -51,8 +61,11 @@ def run_nevergrad(
 
     for _ in range(n_eval):
         candidate = optimizer.ask()
-        sample_seed = int(candidate.value)
-        cfg = sample_cfg(sample_seed)
+        if hasattr(config_space, "decode_nevergrad_candidate"):
+            cfg = config_space.decode_nevergrad_candidate(candidate)
+        else:
+            sample_seed = int(candidate.value)
+            cfg = sample_cfg(sample_seed)
         cfg["n_entry_rules"] = int(obj_config.get("n_entry_rules", 3))
         cfg["n_exit_rules"] = int(obj_config.get("n_exit_rules", 1))
 
@@ -71,7 +84,7 @@ def run_nevergrad(
             score = compute_objective(metrics, policy, obj_config)
 
         optimizer.tell(candidate, float(score))
-        history.append({"config": cfg, "score": float(score), "metrics": metrics, "sample_seed": sample_seed})
+        history.append({"config": cfg, "score": float(score), "metrics": metrics})
 
         if policy is not None and score < best_score:
             best_score = float(score)

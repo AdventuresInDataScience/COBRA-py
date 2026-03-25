@@ -34,6 +34,8 @@ def _cmp(lhs: np.ndarray, rhs: np.ndarray | float, op: str) -> np.ndarray:
         out = lhs > rhs
     elif op == "<":
         out = lhs < rhs
+    elif op == "==":
+        out = lhs == rhs
     else:
         out = np.zeros_like(lhs, dtype=bool)
     out &= np.isfinite(lhs)
@@ -149,5 +151,35 @@ def combine_rules(rules: tuple[RuleConfig, ...], cache: IndicatorCache, price: n
     if not rules:
         return np.zeros(len(price), dtype=bool)
     signals = [evaluate_rule(r, cache, price) for r in rules]
+    return np.logical_and.reduce(signals)
+
+
+def combine_rules_with_logic(
+    rules: tuple[RuleConfig, ...],
+    cache: IndicatorCache,
+    price: np.ndarray,
+    logic: str = "and",
+) -> np.ndarray:
+    if not rules:
+        return np.zeros(len(price), dtype=bool)
+
+    key = str(logic).strip().lower()
+    signals = [evaluate_rule(r, cache, price) for r in rules]
+
+    if key == "or":
+        return np.logical_or.reduce(signals)
+
+    if key == "dnf":
+        grouped: dict[int, list[np.ndarray]] = {}
+        for rule, sig in zip(rules, signals):
+            gid = int(rule.group_id if rule.group_id is not None else 0)
+            grouped.setdefault(gid, []).append(sig)
+
+        # DNF: OR over conjunction blocks, i.e. (A and B) or (C and D) ...
+        clauses = [np.logical_and.reduce(group_signals) for group_signals in grouped.values() if group_signals]
+        if not clauses:
+            return np.zeros(len(price), dtype=bool)
+        return np.logical_or.reduce(clauses)
+
     return np.logical_and.reduce(signals)
 

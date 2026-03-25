@@ -1,8 +1,0 @@
-Entry conditions (ALL must be true simultaneously):
-  Rule 1: macd(10, 21, 7) crosses_below 19.239720735779553
-
-Exit conditions:
-  Rule 1: macd(15, 24, 12) crosses_above 55.9905349846329
-
-Stop-loss: pct (0.09440444639315765,)
-Take-profit: swing_high (76,)
