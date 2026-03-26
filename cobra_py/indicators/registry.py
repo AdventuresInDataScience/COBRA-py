@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
+import pandas_ta_classic as ta
 
 
 @dataclass
@@ -18,124 +19,229 @@ class IndicatorDef:
 
 
 def _sma(close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    return {"ma": close.rolling(period).mean().to_numpy()}
+    out = ta.sma(close=close, length=period)
+    return {"ma": np.asarray(out, dtype=float)}
 
 
 def _ema(close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    return {"ma": close.ewm(span=period, adjust=False).mean().to_numpy()}
+    out = ta.ema(close=close, length=period)
+    return {"ma": np.asarray(out, dtype=float)}
 
 
 def _wma(close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    weights = np.arange(1, period + 1, dtype=float)
-    out = close.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
-    return {"ma": out.to_numpy()}
+    out = ta.wma(close=close, length=period)
+    return {"ma": np.asarray(out, dtype=float)}
 
 
 def _rsi(close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    delta = close.diff()
-    up = delta.clip(lower=0)
-    down = -delta.clip(upper=0)
-    avg_up = up.ewm(alpha=1 / period, adjust=False).mean()
-    avg_down = down.ewm(alpha=1 / period, adjust=False).mean()
-    rs = avg_up / (avg_down + 1e-12)
-    rsi = 100 - (100 / (1 + rs))
-    return {"rsi": rsi.to_numpy()}
+    out = ta.rsi(close=close, length=period)
+    return {"rsi": np.asarray(out, dtype=float)}
+
+
+def _col(df: pd.DataFrame, prefix: str) -> pd.Series:
+    for c in df.columns:
+        if str(c).startswith(prefix):
+            return df[c]
+    raise KeyError(f"Missing expected pandas-ta column prefix '{prefix}' in {list(df.columns)}")
 
 
 def _macd(close: pd.Series, fast: int, slow: int, signal: int) -> dict[str, np.ndarray]:
-    fast_ema = close.ewm(span=fast, adjust=False).mean()
-    slow_ema = close.ewm(span=slow, adjust=False).mean()
-    macd = fast_ema - slow_ema
-    sig = macd.ewm(span=signal, adjust=False).mean()
-    hist = macd - sig
-    return {"macd": macd.to_numpy(), "signal": sig.to_numpy(), "hist": hist.to_numpy()}
+    out = ta.macd(close=close, fast=fast, slow=slow, signal=signal)
+    if out is None:
+        nan = np.full(len(close), np.nan, dtype=float)
+        return {"macd": nan, "signal": nan, "hist": nan}
+    return {
+        "macd": np.asarray(_col(out, "MACD_"), dtype=float),
+        "signal": np.asarray(_col(out, "MACDs_"), dtype=float),
+        "hist": np.asarray(_col(out, "MACDh_"), dtype=float),
+    }
 
 
 def _bb(close: pd.Series, period: int, std: float, ma_type: str) -> dict[str, np.ndarray]:
-    if ma_type == "ema":
-        mid = close.ewm(span=period, adjust=False).mean()
-    else:
-        mid = close.rolling(period).mean()
-    sigma = close.rolling(period).std(ddof=0)
-    up = mid + std * sigma
-    low = mid - std * sigma
-    return {"upper": up.to_numpy(), "middle": mid.to_numpy(), "lower": low.to_numpy()}
+    mamode = "ema" if str(ma_type).lower() == "ema" else "sma"
+    out = ta.bbands(close=close, length=period, std=std, mamode=mamode)
+    if out is None:
+        nan = np.full(len(close), np.nan, dtype=float)
+        return {"upper": nan, "middle": nan, "lower": nan}
+    return {
+        "upper": np.asarray(_col(out, "BBU_"), dtype=float),
+        "middle": np.asarray(_col(out, "BBM_"), dtype=float),
+        "lower": np.asarray(_col(out, "BBL_"), dtype=float),
+    }
 
 
 def _atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    prev_close = close.shift(1)
-    tr = pd.concat([(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
-    atr = tr.ewm(alpha=1 / period, adjust=False).mean()
-    return {"atr": atr.to_numpy()}
+    out = ta.atr(high=high, low=low, close=close, length=period)
+    return {"atr": np.asarray(out, dtype=float)}
 
 
 def _keltner(high: pd.Series, low: pd.Series, close: pd.Series, ema_period: int, atr_period: int, mult: float) -> dict[str, np.ndarray]:
-    center = close.ewm(span=ema_period, adjust=False).mean()
-    atr = _atr(high, low, close, atr_period)["atr"]
-    up = center.to_numpy() + mult * atr
-    lowb = center.to_numpy() - mult * atr
+    center = ta.ema(close=close, length=ema_period)
+    atr = ta.atr(high=high, low=low, close=close, length=atr_period)
+    up = np.asarray(center, dtype=float) + float(mult) * np.asarray(atr, dtype=float)
+    lowb = np.asarray(center, dtype=float) - float(mult) * np.asarray(atr, dtype=float)
     return {"upper": up, "lower": lowb}
 
 
 def _donchian(high: pd.Series, low: pd.Series, period: int) -> dict[str, np.ndarray]:
-    up = high.rolling(period).max()
-    lowb = low.rolling(period).min()
-    return {"upper": up.to_numpy(), "lower": lowb.to_numpy()}
+    out = ta.donchian(high=high, low=low, lower_length=period, upper_length=period)
+    if out is None:
+        nan = np.full(len(high), np.nan, dtype=float)
+        return {"upper": nan, "lower": nan}
+    return {
+        "upper": np.asarray(_col(out, "DCU_"), dtype=float),
+        "lower": np.asarray(_col(out, "DCL_"), dtype=float),
+    }
 
 
 def _adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    up_move = high.diff()
-    down_move = -low.diff()
-    plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
-    minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
-    atr = _atr(high, low, close, period)["atr"]
-    plus_di = 100 * pd.Series(plus_dm, index=close.index).ewm(alpha=1 / period, adjust=False).mean().to_numpy() / (atr + 1e-12)
-    minus_di = 100 * pd.Series(minus_dm, index=close.index).ewm(alpha=1 / period, adjust=False).mean().to_numpy() / (atr + 1e-12)
-    dx = 100 * np.abs(plus_di - minus_di) / (plus_di + minus_di + 1e-12)
-    adx = pd.Series(dx, index=close.index).ewm(alpha=1 / period, adjust=False).mean().to_numpy()
-    return {"adx": adx}
+    out = ta.adx(high=high, low=low, close=close, length=period)
+    if out is None:
+        return {"adx": np.full(len(close), np.nan, dtype=float)}
+    return {"adx": np.asarray(_col(out, "ADX_"), dtype=float)}
 
 
 def _stoch(high: pd.Series, low: pd.Series, close: pd.Series, k: int, d: int, smooth: int) -> dict[str, np.ndarray]:
-    ll = low.rolling(k).min()
-    hh = high.rolling(k).max()
-    raw_k = 100 * (close - ll) / (hh - ll + 1e-12)
-    k_line = raw_k.rolling(smooth).mean()
-    d_line = k_line.rolling(d).mean()
-    return {"k": k_line.to_numpy(), "d": d_line.to_numpy()}
+    out = ta.stoch(high=high, low=low, close=close, k=k, d=d, smooth_k=smooth)
+    if out is None:
+        nan = np.full(len(close), np.nan, dtype=float)
+        return {"k": nan, "d": nan}
+    return {
+        "k": np.asarray(_col(out, "STOCHk_"), dtype=float),
+        "d": np.asarray(_col(out, "STOCHd_"), dtype=float),
+    }
 
 
 def _psar(high: pd.Series, low: pd.Series, step: float, max_step: float) -> dict[str, np.ndarray]:
-    # Lightweight approximation suitable for MVP smoke usage.
-    mid = (high + low) / 2.0
-    sar = mid.ewm(alpha=min(max(step, 0.001), max_step), adjust=False).mean()
-    return {"psar": sar.to_numpy()}
+    out = ta.psar(high=high, low=low, af=step, max_af=max_step)
+    if out is None:
+        return {"psar": np.full(len(high), np.nan, dtype=float)}
+    long_sar = _col(out, "PSARl_")
+    short_sar = _col(out, "PSARs_")
+    sar = long_sar.fillna(short_sar)
+    return {"psar": np.asarray(sar, dtype=float)}
 
 
 def _cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    tp = (high + low + close) / 3.0
-    ma = tp.rolling(period).mean()
-    md = (tp - ma).abs().rolling(period).mean()
-    cci = (tp - ma) / (0.015 * (md + 1e-12))
-    return {"cci": cci.to_numpy()}
+    out = ta.cci(high=high, low=low, close=close, length=period)
+    return {"cci": np.asarray(out, dtype=float)}
 
 
 def _roc(close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    roc = 100 * (close / close.shift(period) - 1.0)
-    return {"roc": roc.to_numpy()}
+    out = ta.roc(close=close, length=period)
+    return {"roc": np.asarray(out, dtype=float)}
 
 
 def _obv(close: pd.Series, volume: pd.Series) -> dict[str, np.ndarray]:
-    direction = np.sign(close.diff().fillna(0.0))
-    obv = (direction * volume).cumsum()
-    return {"obv": obv.to_numpy()}
+    out = ta.obv(close=close, volume=volume)
+    return {"obv": np.asarray(out, dtype=float)}
 
 
 def _vwap(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series) -> dict[str, np.ndarray]:
-    tp = (high + low + close) / 3.0
-    cumulative = (tp * volume).cumsum()
-    cum_vol = volume.cumsum() + 1e-12
-    return {"vwap": (cumulative / cum_vol).to_numpy()}
+    out = ta.vwap(high=high, low=low, close=close, volume=volume)
+    return {"vwap": np.asarray(out, dtype=float)}
+
+
+def _ichimoku(high: pd.Series, low: pd.Series, close: pd.Series, tenkan: int, kijun: int, senkou: int) -> dict[str, np.ndarray]:
+    out = ta.ichimoku(high=high, low=low, close=close, tenkan=tenkan, kijun=kijun, senkou=senkou)
+    if out is None:
+        nan = np.full(len(close), np.nan, dtype=float)
+        return {
+            "tenkan": nan,
+            "kijun": nan,
+            "senkou_a": nan,
+            "senkou_b": nan,
+            "chikou": nan,
+        }
+    lead_df = out[0] if isinstance(out, tuple) else out
+    return {
+        "tenkan": np.asarray(_col(lead_df, "ITS_"), dtype=float),
+        "kijun": np.asarray(_col(lead_df, "IKS_"), dtype=float),
+        "senkou_a": np.asarray(_col(lead_df, "ISA_"), dtype=float),
+        "senkou_b": np.asarray(_col(lead_df, "ISB_"), dtype=float),
+        "chikou": np.asarray(_col(lead_df, "ICS_"), dtype=float),
+    }
+
+
+def _aroon(high: pd.Series, low: pd.Series, period: int) -> dict[str, np.ndarray]:
+    out = ta.aroon(high=high, low=low, length=period)
+    if out is None:
+        nan = np.full(len(high), np.nan, dtype=float)
+        return {"up": nan, "down": nan, "osc": nan}
+    return {
+        "up": np.asarray(_col(out, "AROONU_"), dtype=float),
+        "down": np.asarray(_col(out, "AROOND_"), dtype=float),
+        "osc": np.asarray(_col(out, "AROONOSC_"), dtype=float),
+    }
+
+
+def _supertrend(high: pd.Series, low: pd.Series, close: pd.Series, period: int, mult: float) -> dict[str, np.ndarray]:
+    out = ta.supertrend(high=high, low=low, close=close, length=period, multiplier=mult)
+    if out is None:
+        nan = np.full(len(close), np.nan, dtype=float)
+        return {"supertrend": nan, "direction": nan}
+    return {
+        "supertrend": np.asarray(_col(out, "SUPERT_"), dtype=float),
+        "direction": np.asarray(_col(out, "SUPERTd_"), dtype=float),
+    }
+
+
+def _willr(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> dict[str, np.ndarray]:
+    out = ta.willr(high=high, low=low, close=close, length=period)
+    return {"willr": np.asarray(out, dtype=float)}
+
+
+def _ppo(close: pd.Series, fast: int, slow: int, signal: int) -> dict[str, np.ndarray]:
+    out = ta.ppo(close=close, fast=fast, slow=slow, signal=signal)
+    if out is None:
+        nan = np.full(len(close), np.nan, dtype=float)
+        return {"ppo": nan, "signal": nan, "hist": nan}
+    return {
+        "ppo": np.asarray(_col(out, "PPO_"), dtype=float),
+        "signal": np.asarray(_col(out, "PPOs_"), dtype=float),
+        "hist": np.asarray(_col(out, "PPOh_"), dtype=float),
+    }
+
+
+def _mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int) -> dict[str, np.ndarray]:
+    out = ta.mfi(high=high, low=low, close=close, volume=volume, length=period)
+    return {"mfi": np.asarray(out, dtype=float)}
+
+
+def _ao(high: pd.Series, low: pd.Series, fast: int, slow: int) -> dict[str, np.ndarray]:
+    out = ta.ao(high=high, low=low, fast=fast, slow=slow)
+    return {"ao": np.asarray(out, dtype=float)}
+
+
+def _tsi(close: pd.Series, fast: int, slow: int, signal: int) -> dict[str, np.ndarray]:
+    out = ta.tsi(close=close, fast=fast, slow=slow, signal=signal)
+    if out is None:
+        nan = np.full(len(close), np.nan, dtype=float)
+        return {"tsi": nan, "signal": nan}
+    return {
+        "tsi": np.asarray(_col(out, "TSI_"), dtype=float),
+        "signal": np.asarray(_col(out, "TSIs_"), dtype=float),
+    }
+
+
+def _uo(high: pd.Series, low: pd.Series, close: pd.Series, fast: int, medium: int, slow: int) -> dict[str, np.ndarray]:
+    out = ta.uo(high=high, low=low, close=close, fast=fast, medium=medium, slow=slow)
+    return {"uo": np.asarray(out, dtype=float)}
+
+
+def _stdev(close: pd.Series, period: int) -> dict[str, np.ndarray]:
+    out = ta.stdev(close=close, length=period)
+    return {"stdev": np.asarray(out, dtype=float)}
+
+
+def _ad(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series) -> dict[str, np.ndarray]:
+    out = ta.ad(high=high, low=low, close=close, volume=volume)
+    return {"ad": np.asarray(out, dtype=float)}
+
+
+def _cmf(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int) -> dict[str, np.ndarray]:
+    out = ta.cmf(high=high, low=low, close=close, volume=volume, length=period)
+    return {"cmf": np.asarray(out, dtype=float)}
 
 
 def _compute(ind: str, data: pd.DataFrame, params: dict) -> dict[str, np.ndarray]:
@@ -175,6 +281,30 @@ def _compute(ind: str, data: pd.DataFrame, params: dict) -> dict[str, np.ndarray
         return _obv(c, v)
     if ind == "vwap":
         return _vwap(h, l, c, v)
+    if ind == "ichimoku":
+        return _ichimoku(h, l, c, params["tenkan"], params["kijun"], params["senkou"])
+    if ind == "aroon":
+        return _aroon(h, l, params["period"])
+    if ind == "supertrend":
+        return _supertrend(h, l, c, params["period"], params["mult"])
+    if ind == "willr":
+        return _willr(h, l, c, params["period"])
+    if ind == "ppo":
+        return _ppo(c, params["fast"], params["slow"], params["signal"])
+    if ind == "mfi":
+        return _mfi(h, l, c, v, params["period"])
+    if ind == "ao":
+        return _ao(h, l, params["fast"], params["slow"])
+    if ind == "tsi":
+        return _tsi(c, params["fast"], params["slow"], params["signal"])
+    if ind == "uo":
+        return _uo(h, l, c, params["fast"], params["medium"], params["slow"])
+    if ind == "stdev":
+        return _stdev(c, params["period"])
+    if ind == "ad":
+        return _ad(h, l, c, v)
+    if ind == "cmf":
+        return _cmf(h, l, c, v, params["period"])
     raise KeyError(ind)
 
 
@@ -196,6 +326,18 @@ def make_default_registry() -> list[IndicatorDef]:
         IndicatorDef("roc", {"period": [5, 10, 14, 20]}, ["roc"], lambda d, **p: _compute("roc", d, p)),
         IndicatorDef("obv", {}, ["obv"], lambda d, **p: _compute("obv", d, p)),
         IndicatorDef("vwap", {}, ["vwap"], lambda d, **p: _compute("vwap", d, p)),
+        IndicatorDef("ichimoku", {"tenkan": [9], "kijun": [26], "senkou": [52]}, ["tenkan", "kijun", "senkou_a", "senkou_b", "chikou"], lambda d, **p: _compute("ichimoku", d, p)),
+        IndicatorDef("aroon", {"period": [14, 25]}, ["up", "down", "osc"], lambda d, **p: _compute("aroon", d, p)),
+        IndicatorDef("supertrend", {"period": [7, 10, 14], "mult": [2.0, 3.0, 4.0]}, ["supertrend", "direction"], lambda d, **p: _compute("supertrend", d, p)),
+        IndicatorDef("willr", {"period": [10, 14, 20]}, ["willr"], lambda d, **p: _compute("willr", d, p)),
+        IndicatorDef("ppo", {"fast": [8, 10, 12], "slow": [21, 26, 30], "signal": [7, 9, 12]}, ["ppo", "signal", "hist"], lambda d, **p: _compute("ppo", d, p), constraints=lambda params: params["fast"] < params["slow"]),
+        IndicatorDef("mfi", {"period": [10, 14, 20]}, ["mfi"], lambda d, **p: _compute("mfi", d, p)),
+        IndicatorDef("ao", {"fast": [5], "slow": [34]}, ["ao"], lambda d, **p: _compute("ao", d, p)),
+        IndicatorDef("tsi", {"fast": [13], "slow": [25], "signal": [13]}, ["tsi", "signal"], lambda d, **p: _compute("tsi", d, p)),
+        IndicatorDef("uo", {"fast": [7], "medium": [14], "slow": [28]}, ["uo"], lambda d, **p: _compute("uo", d, p)),
+        IndicatorDef("stdev", {"period": [10, 20, 30]}, ["stdev"], lambda d, **p: _compute("stdev", d, p)),
+        IndicatorDef("ad", {}, ["ad"], lambda d, **p: _compute("ad", d, p)),
+        IndicatorDef("cmf", {"period": [10, 20]}, ["cmf"], lambda d, **p: _compute("cmf", d, p)),
     ]
     return defs
 

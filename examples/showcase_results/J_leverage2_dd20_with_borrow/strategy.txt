@@ -1,10 +1,8 @@
-Entry conditions (ALL must be true simultaneously):
-  Rule 1: sma(5,) crosses_above price
-  Rule 2: sma(5,) > price
-  Rule 3: ema(8,) crosses_above price
+Entry conditions (logic: AND, all rules must be true):
+  Rule 1: sma(8,).ma > price
 
-Exit conditions:
-  Rule 1: ema(5,) < price
+Exit conditions (logic: AND, all rules must be true):
+  Rule 1: ema(8,).ma crosses_above price
 
-Stop-loss: atr_mult (1.0, 10)
-Take-profit: atr_mult (1.0, 7)
+Stop-loss: pct (0.01,)
+Take-profit: pct (0.005,)

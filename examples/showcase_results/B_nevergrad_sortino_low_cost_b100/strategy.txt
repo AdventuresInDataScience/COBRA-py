@@ -1,9 +1,8 @@
-Entry conditions (ALL must be true simultaneously):
-  Rule 1: sma(13,) > price
-  Rule 2: macd(15, 21, 9) == price
+Entry conditions (logic: OR, any rule can trigger):
+  Rule 1: vwap().vwap > price
 
-Exit conditions:
-  Rule 1: stoch(9, 7, 5) > 85.0
+Exit conditions (logic: DNF, OR across group-wise AND clauses):
+  (none - exits driven by stop-loss and take-profit only)
 
-Stop-loss: trailing_atr (3.25, 14)
-Take-profit: bb_upper (20, 2.0, 'sma')
+Stop-loss: atr_mult (2.0, 7)
+Take-profit: atr_mult (5.25, 10)

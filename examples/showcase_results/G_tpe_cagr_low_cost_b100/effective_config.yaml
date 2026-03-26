@@ -13,8 +13,8 @@ policy:
   n_exit_rules: 1
 backtest:
   init_cash: 10000.0
-  fee_rate: 0.0002
-  slippage: 0.0001
+  fee_rate: 0.0005
+  slippage: 0.0005
   leverage: 1.0
   leverage_range:
     start: 0.5

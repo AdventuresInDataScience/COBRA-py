@@ -4,6 +4,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import vectorbt as vbt
 
 from cobra_py.indicators.cache import IndicatorCache
 from cobra_py.policy.rules import combine_rules_with_logic
@@ -11,14 +12,6 @@ from cobra_py.policy.schema import Policy
 from cobra_py.policy.sl_tp import compute_sl, compute_tp
 
 from .metrics import extract_metrics
-
-
-def _bars_per_year(freq: str) -> float:
-    if freq.endswith("H"):
-        return 24.0 * 252.0
-    if freq.endswith("T") or freq.endswith("min"):
-        return 390.0 * 252.0
-    return 252.0
 
 
 def _validate_risk_levels(levels: np.ndarray, expected_len: int, label: str, level_type: str) -> None:
@@ -30,104 +23,23 @@ def _validate_risk_levels(levels: np.ndarray, expected_len: int, label: str, lev
         )
 
 
-def _simulate_single_position(
-    close: np.ndarray,
-    high: np.ndarray,
-    low: np.ndarray,
-    entries: np.ndarray,
-    exits: np.ndarray,
-    sl_levels: np.ndarray,
-    tp_levels: np.ndarray,
-    init_cash: float,
-    fee_rate: float,
-    slippage: float,
-    leverage: float,
-    borrow_cost_rate: float,
-    freq: str,
-) -> dict:
-    cash = float(init_cash)
-    pos_qty = 0.0
-    in_pos = False
-    entry_price = 0.0
-    trade_entry_equity = 0.0
-    borrowed_principal = 0.0
-    accrued_borrow = 0.0
-    stop = np.nan
-    take = np.nan
-    bars_per_year = _bars_per_year(freq)
-    borrow_per_bar = max(float(borrow_cost_rate), 0.0) / max(bars_per_year, 1.0)
-    leverage = max(float(leverage), 1.0)
+def _as_series(values: np.ndarray, index: pd.Index, name: str) -> pd.Series:
+    return pd.Series(np.asarray(values), index=index, name=name)
 
-    equity_curve = []
-    trade_returns = []
 
-    for i in range(len(close)):
-        px = float(close[i])
+def _stop_pct(close: np.ndarray, levels: np.ndarray, is_take_profit: bool) -> np.ndarray:
+    close_safe = np.maximum(np.asarray(close, dtype=float), 1e-12)
+    lvl = np.asarray(levels, dtype=float)
+    if is_take_profit:
+        pct = (lvl - close_safe) / close_safe
+    else:
+        pct = (close_safe - lvl) / close_safe
+    pct = np.where(np.isfinite(pct) & (pct > 0.0), pct, np.nan)
+    return pct
 
-        if not in_pos and bool(entries[i]):
-            trade_entry_equity = cash
-            fill = px * (1.0 + slippage)
-            gross_notional = cash * leverage
-            fee = gross_notional * fee_rate
-            equity_after_fee = cash - fee
-            if equity_after_fee <= 0:
-                equity_curve.append(cash)
-                continue
-            pos_qty = gross_notional / max(fill, 1e-12)
-            borrowed_principal = max(gross_notional - equity_after_fee, 0.0)
-            accrued_borrow = 0.0
-            cash = 0.0
-            in_pos = True
-            entry_price = fill
-            stop = sl_levels[i]
-            take = tp_levels[i]
 
-        elif in_pos:
-            accrued_borrow += borrowed_principal * borrow_per_bar
-            hit_stop = np.isfinite(stop) and low[i] <= stop
-            hit_take = np.isfinite(take) and high[i] >= take
-            explicit_exit = bool(exits[i])
-            if hit_stop or hit_take or explicit_exit:
-                if hit_stop:
-                    exit_px = float(stop)
-                elif hit_take:
-                    exit_px = float(take)
-                else:
-                    exit_px = px
-                exit_px *= (1.0 - slippage)
-                gross = pos_qty * exit_px
-                fee = gross * fee_rate
-                cash = gross - fee - borrowed_principal - accrued_borrow
-                cash = max(cash, 0.0)
-                trade_returns.append(cash / max(trade_entry_equity, 1e-12) - 1.0)
-                pos_qty = 0.0
-                in_pos = False
-                entry_price = 0.0
-                trade_entry_equity = 0.0
-                borrowed_principal = 0.0
-                accrued_borrow = 0.0
-                stop = np.nan
-                take = np.nan
-
-        equity = cash if not in_pos else pos_qty * px - borrowed_principal - accrued_borrow
-        equity = max(float(equity), 0.0)
-        equity_curve.append(equity)
-
-    if in_pos:
-        accrued_borrow += borrowed_principal * borrow_per_bar
-        final_px = close[-1] * (1.0 - slippage)
-        gross = pos_qty * final_px
-        fee = gross * fee_rate
-        cash = gross - fee - borrowed_principal - accrued_borrow
-        cash = max(cash, 0.0)
-        trade_returns.append(cash / max(trade_entry_equity, 1e-12) - 1.0)
-        equity_curve[-1] = cash
-
-    return {
-        "equity_curve": np.asarray(equity_curve, dtype=float),
-        "trade_returns": np.asarray(trade_returns, dtype=float),
-        "n_trades": int(len(trade_returns)),
-    }
+def _maybe_call(x: Any) -> Any:
+    return x() if callable(x) else x
 
 
 def run_backtest(policy: Policy, cache: IndicatorCache, data: pd.DataFrame, config: dict[str, Any] | None = None) -> dict:
@@ -135,8 +47,6 @@ def run_backtest(policy: Policy, cache: IndicatorCache, data: pd.DataFrame, conf
     init_cash = float(cfg.get("init_cash", 10000.0))
     fee_rate = float(cfg.get("fee_rate", 0.001))
     slippage = float(cfg.get("slippage", 0.0005))
-    leverage = float(cfg.get("leverage", 1.0))
-    borrow_cost_rate = float(cfg.get("borrow_cost_rate", 0.0))
     risk_free_rate_annual = float(cfg.get("risk_free_rate_annual", 0.0))
     freq = str(cfg.get("freq", "1D"))
 
@@ -156,23 +66,42 @@ def run_backtest(policy: Policy, cache: IndicatorCache, data: pd.DataFrame, conf
     _validate_risk_levels(sl_levels, len(close), "compute_sl", policy.sl_config.sl_type)
     _validate_risk_levels(tp_levels, len(close), "compute_tp", policy.tp_config.tp_type)
 
-    raw = _simulate_single_position(
-        close=close,
-        high=high,
-        low=low,
-        entries=entry_signals,
-        exits=exit_signals,
-        sl_levels=sl_levels,
-        tp_levels=tp_levels,
+    index = data.index
+    close_s = _as_series(close, index, "close")
+    entries_s = _as_series(entry_signals.astype(bool), index, "entries")
+    exits_s = _as_series(exit_signals.astype(bool), index, "exits")
+    sl_stop_s = _as_series(_stop_pct(close, sl_levels, is_take_profit=False), index, "sl_stop")
+    tp_stop_s = _as_series(_stop_pct(close, tp_levels, is_take_profit=True), index, "tp_stop")
+
+    portfolio = vbt.Portfolio.from_signals(
+        close=close_s,
+        entries=entries_s,
+        exits=exits_s,
+        sl_stop=sl_stop_s,
+        sl_trail=(policy.sl_config.sl_type == "trailing_atr"),
+        tp_stop=tp_stop_s,
         init_cash=init_cash,
-        fee_rate=fee_rate,
+        fees=fee_rate,
         slippage=slippage,
-        leverage=leverage,
-        borrow_cost_rate=borrow_cost_rate,
         freq=freq,
+        size=np.inf,
     )
-    metrics = extract_metrics(raw, freq=freq, risk_free_rate_annual=risk_free_rate_annual)
-    metrics["equity_curve"] = raw["equity_curve"]
-    metrics["trade_returns"] = raw["trade_returns"]
+
+    metrics = extract_metrics(portfolio, freq=freq, risk_free_rate_annual=risk_free_rate_annual)
+    equity_obj = _maybe_call(portfolio.value)
+    equity_curve = np.asarray(equity_obj.to_numpy(), dtype=float) if hasattr(equity_obj, "to_numpy") else np.asarray(equity_obj, dtype=float)
+    records = portfolio.trades.records_readable
+    if "Return" in records:
+        trade_returns = np.asarray(records["Return"].to_numpy(), dtype=float)
+    else:
+        trade_returns_obj = _maybe_call(portfolio.trades.returns)
+        if hasattr(trade_returns_obj, "to_pd"):
+            trade_returns = np.asarray(trade_returns_obj.to_pd().dropna().to_numpy(), dtype=float)
+        elif hasattr(trade_returns_obj, "to_numpy"):
+            trade_returns = np.asarray(trade_returns_obj.to_numpy(), dtype=float)
+        else:
+            trade_returns = np.asarray(trade_returns_obj, dtype=float)
+    metrics["equity_curve"] = equity_curve
+    metrics["trade_returns"] = trade_returns
     return metrics
 
