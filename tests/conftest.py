@@ -29,7 +29,7 @@ def sample_ohlcv_data() -> pd.DataFrame:
 
 @pytest.fixture()
 def small_cache(sample_ohlcv_data):
-    reduced = [r for r in DEFAULT_REGISTRY if r.name in {"sma", "rsi", "bb", "atr"}]
+    reduced = [r for r in DEFAULT_REGISTRY if r.name in {"sma", "rsi", "bb", "atr", "willr", "aroon", "cmf"}]
     return precompute_all(sample_ohlcv_data, reduced, n_jobs=1)
 
 

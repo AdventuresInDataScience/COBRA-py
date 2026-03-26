@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any
 
@@ -61,7 +61,77 @@ def _indicator_params_output(prefix: str, indicator: str, config: dict[str, Any]
         return (), "obv"
     if indicator == "vwap":
         return (), "vwap"
+    if indicator == "ad":
+        return (), "ad"
 
+    # ---- New trend indicators ----
+    if indicator == "ichimoku":
+        params = (
+            int(config.get(f"{prefix}_ichimoku_tenkan", 9)),
+            int(config.get(f"{prefix}_ichimoku_kijun", 26)),
+            int(config.get(f"{prefix}_ichimoku_senkou", 52)),
+        )
+        return params, str(config.get(f"{prefix}_ichimoku_output", "tenkan"))
+    if indicator == "aroon":
+        params = (int(config.get(f"{prefix}_aroon_period", 14)),)
+        return params, str(config.get(f"{prefix}_aroon_output", "aroon_osc"))
+    if indicator == "supertrend":
+        params = (
+            int(config.get(f"{prefix}_supertrend_period", 10)),
+            float(config.get(f"{prefix}_supertrend_mult", 2.0)),
+        )
+        return params, str(config.get(f"{prefix}_supertrend_output", "supertrend"))
+    if indicator == "alligator":
+        params = (
+            int(config.get(f"{prefix}_alligator_jaw_period", 13)),
+            int(config.get(f"{prefix}_alligator_teeth_period", 8)),
+            int(config.get(f"{prefix}_alligator_lips_period", 5)),
+        )
+        return params, str(config.get(f"{prefix}_alligator_output", "jaw"))
+
+    # ---- New momentum indicators ----
+    if indicator == "willr":
+        return (int(config.get(f"{prefix}_willr_period", 14)),), "willr"
+    if indicator == "ppo":
+        params = (
+            int(config.get(f"{prefix}_ppo_fast", 12)),
+            int(config.get(f"{prefix}_ppo_slow", 26)),
+            int(config.get(f"{prefix}_ppo_signal", 9)),
+        )
+        return params, str(config.get(f"{prefix}_ppo_output", "ppo"))
+    if indicator == "mfi":
+        return (int(config.get(f"{prefix}_mfi_period", 14)),), "mfi"
+    if indicator == "ao":
+        params = (
+            int(config.get(f"{prefix}_ao_fast", 5)),
+            int(config.get(f"{prefix}_ao_slow", 34)),
+        )
+        return params, "ao"
+    if indicator == "tsi":
+        params = (
+            int(config.get(f"{prefix}_tsi_fast", 13)),
+            int(config.get(f"{prefix}_tsi_slow", 25)),
+        )
+        return params, str(config.get(f"{prefix}_tsi_output", "tsi"))
+    if indicator == "uo":
+        params = (
+            int(config.get(f"{prefix}_uo_fast", 7)),
+            int(config.get(f"{prefix}_uo_medium", 14)),
+            int(config.get(f"{prefix}_uo_slow", 28)),
+        )
+        return params, "uo"
+
+    # ---- New volatility indicators ----
+    if indicator == "stdev":
+        return (int(config.get(f"{prefix}_stdev_period", 20)),), "stdev"
+    if indicator == "chaikin_vol":
+        return (int(config.get(f"{prefix}_chaikin_vol_period", 14)),), "chaikin_vol"
+
+    # ---- New volume indicators ----
+    if indicator == "cmf":
+        return (int(config.get(f"{prefix}_cmf_period", 20)),), "cmf"
+
+    # Fallback for any unknown indicator: try single period param
     params = (int(config.get(f"{prefix}_{indicator}_period", 14)),)
     return params, str(config.get(f"{prefix}_output", "ma"))
 

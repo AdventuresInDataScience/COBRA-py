@@ -1,3 +1,20 @@
+"""Indicator registry using pandas-ta as the compute backend.
+
+Covers 30 indicators across four categories:
+  - Trend (10): SMA, EMA, WMA, MACD, PSAR, ADX, Ichimoku, Aroon, SuperTrend, Alligator
+  - Momentum (10): RSI, Stoch, CCI, Williams %R, PPO, MFI, ROC, Awesome Oscillator, TSI, Ultimate Oscillator
+  - Volatility (6): Bollinger Bands, ATR, StdDev, Keltner, Donchian, Chaikin Volatility
+  - Volume (4): OBV, A/D Line, CMF, VWAP
+
+Note: Zig Zag is excluded — it requires future data to confirm pivots,
+making it unsuitable for forward-looking signal generation.
+
+Supports both pandas-ta-classic (preferred, actively maintained) and the
+original pandas-ta as a fallback. Both expose an identical function API.
+Install one of:
+    pip install pandas-ta-classic   # recommended
+    pip install pandas-ta           # original (less actively maintained)
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,6 +23,20 @@ from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
+
+# Try pandas-ta-classic first (actively maintained community fork),
+# then fall back to original pandas-ta. Both expose the same API.
+try:
+    import pandas_ta_classic as ta
+except ImportError:
+    try:
+        import pandas_ta as ta
+    except ImportError as exc:
+        raise ImportError(
+            "No pandas-ta backend found. Install one of:\n"
+            "  pip install pandas-ta-classic   (recommended)\n"
+            "  pip install pandas-ta"
+        ) from exc
 
 
 @dataclass
@@ -17,191 +48,437 @@ class IndicatorDef:
     constraints: Callable[[dict], bool] | None = None
 
 
-def _sma(close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    return {"ma": close.rolling(period).mean().to_numpy()}
+# ==========================================================================
+# TREND INDICATORS (10)
+# ==========================================================================
+
+def _sma(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.sma(data["close"], length=period)
+    return {"ma": result.to_numpy(dtype=np.float64)}
 
 
-def _ema(close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    return {"ma": close.ewm(span=period, adjust=False).mean().to_numpy()}
+def _ema(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.ema(data["close"], length=period)
+    return {"ma": result.to_numpy(dtype=np.float64)}
 
 
-def _wma(close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    weights = np.arange(1, period + 1, dtype=float)
-    out = close.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
-    return {"ma": out.to_numpy()}
+def _wma(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.wma(data["close"], length=period)
+    return {"ma": result.to_numpy(dtype=np.float64)}
 
 
-def _rsi(close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    delta = close.diff()
-    up = delta.clip(lower=0)
-    down = -delta.clip(upper=0)
-    avg_up = up.ewm(alpha=1 / period, adjust=False).mean()
-    avg_down = down.ewm(alpha=1 / period, adjust=False).mean()
-    rs = avg_up / (avg_down + 1e-12)
-    rsi = 100 - (100 / (1 + rs))
-    return {"rsi": rsi.to_numpy()}
+def _macd(data: pd.DataFrame, fast: int, slow: int, signal: int) -> dict[str, np.ndarray]:
+    result = ta.macd(data["close"], fast=fast, slow=slow, signal=signal)
+    cols = list(result.columns)
+    macd_col = [c for c in cols if c.startswith("MACD_")][0]
+    hist_col = [c for c in cols if c.startswith("MACDh_")][0]
+    signal_col = [c for c in cols if c.startswith("MACDs_")][0]
+    return {
+        "macd": result[macd_col].to_numpy(dtype=np.float64),
+        "signal": result[signal_col].to_numpy(dtype=np.float64),
+        "hist": result[hist_col].to_numpy(dtype=np.float64),
+    }
 
 
-def _macd(close: pd.Series, fast: int, slow: int, signal: int) -> dict[str, np.ndarray]:
-    fast_ema = close.ewm(span=fast, adjust=False).mean()
-    slow_ema = close.ewm(span=slow, adjust=False).mean()
-    macd = fast_ema - slow_ema
-    sig = macd.ewm(span=signal, adjust=False).mean()
-    hist = macd - sig
-    return {"macd": macd.to_numpy(), "signal": sig.to_numpy(), "hist": hist.to_numpy()}
-
-
-def _bb(close: pd.Series, period: int, std: float, ma_type: str) -> dict[str, np.ndarray]:
-    if ma_type == "ema":
-        mid = close.ewm(span=period, adjust=False).mean()
+def _psar(data: pd.DataFrame, step: float, max_step: float) -> dict[str, np.ndarray]:
+    result = ta.psar(data["high"], data["low"], af0=step, af=step, max_af=max_step)
+    cols = list(result.columns)
+    long_col = [c for c in cols if c.startswith("PSARl_")]
+    short_col = [c for c in cols if c.startswith("PSARs_")]
+    if long_col and short_col:
+        long_vals = result[long_col[0]].to_numpy(dtype=np.float64)
+        short_vals = result[short_col[0]].to_numpy(dtype=np.float64)
+        psar = np.where(np.isfinite(long_vals), long_vals, short_vals)
+    elif long_col:
+        psar = result[long_col[0]].to_numpy(dtype=np.float64)
+    elif short_col:
+        psar = result[short_col[0]].to_numpy(dtype=np.float64)
     else:
-        mid = close.rolling(period).mean()
-    sigma = close.rolling(period).std(ddof=0)
-    up = mid + std * sigma
-    low = mid - std * sigma
-    return {"upper": up.to_numpy(), "middle": mid.to_numpy(), "lower": low.to_numpy()}
+        psar = np.full(len(data), np.nan, dtype=np.float64)
+    return {"psar": psar}
 
 
-def _atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    prev_close = close.shift(1)
-    tr = pd.concat([(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
-    atr = tr.ewm(alpha=1 / period, adjust=False).mean()
-    return {"atr": atr.to_numpy()}
+def _adx(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.adx(data["high"], data["low"], data["close"], length=period)
+    cols = list(result.columns)
+    adx_col = [c for c in cols if c.startswith("ADX_")][0]
+    return {"adx": result[adx_col].to_numpy(dtype=np.float64)}
 
 
-def _keltner(high: pd.Series, low: pd.Series, close: pd.Series, ema_period: int, atr_period: int, mult: float) -> dict[str, np.ndarray]:
-    center = close.ewm(span=ema_period, adjust=False).mean()
-    atr = _atr(high, low, close, atr_period)["atr"]
-    up = center.to_numpy() + mult * atr
-    lowb = center.to_numpy() - mult * atr
-    return {"upper": up, "lower": lowb}
+def _ichimoku(data: pd.DataFrame, tenkan: int, kijun: int, senkou: int) -> dict[str, np.ndarray]:
+    result_tuple = ta.ichimoku(data["high"], data["low"], data["close"],
+                               tenkan=tenkan, kijun=kijun, senkou=senkou)
+    # ta.ichimoku returns (ichimoku_df, span_df); we use the first
+    ich = result_tuple[0] if isinstance(result_tuple, tuple) else result_tuple
+    cols = list(ich.columns)
+    # Columns: ISA_t (Senkou A), ISB_k (Senkou B), ITS_t (Tenkan), IKS_k (Kijun), ICS_k (Chikou)
+    tenkan_col = [c for c in cols if c.startswith("ITS_")][0]
+    kijun_col = [c for c in cols if c.startswith("IKS_")][0]
+    senkou_a_col = [c for c in cols if c.startswith("ISA_")][0]
+    senkou_b_col = [c for c in cols if c.startswith("ISB_")][0]
+    out = {
+        "tenkan": ich[tenkan_col].to_numpy(dtype=np.float64),
+        "kijun": ich[kijun_col].to_numpy(dtype=np.float64),
+        "senkou_a": ich[senkou_a_col].to_numpy(dtype=np.float64),
+        "senkou_b": ich[senkou_b_col].to_numpy(dtype=np.float64),
+    }
+    chikou_cols = [c for c in cols if c.startswith("ICS_")]
+    if chikou_cols:
+        out["chikou"] = ich[chikou_cols[0]].to_numpy(dtype=np.float64)
+    return out
 
 
-def _donchian(high: pd.Series, low: pd.Series, period: int) -> dict[str, np.ndarray]:
-    up = high.rolling(period).max()
-    lowb = low.rolling(period).min()
-    return {"upper": up.to_numpy(), "lower": lowb.to_numpy()}
+def _aroon(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.aroon(data["high"], data["low"], length=period)
+    cols = list(result.columns)
+    up_col = [c for c in cols if "AROONU" in c][0]
+    down_col = [c for c in cols if "AROOND" in c][0]
+    osc_col = [c for c in cols if "AROONOSC" in c][0]
+    return {
+        "aroon_up": result[up_col].to_numpy(dtype=np.float64),
+        "aroon_down": result[down_col].to_numpy(dtype=np.float64),
+        "aroon_osc": result[osc_col].to_numpy(dtype=np.float64),
+    }
 
 
-def _adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    up_move = high.diff()
-    down_move = -low.diff()
-    plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
-    minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
-    atr = _atr(high, low, close, period)["atr"]
-    plus_di = 100 * pd.Series(plus_dm, index=close.index).ewm(alpha=1 / period, adjust=False).mean().to_numpy() / (atr + 1e-12)
-    minus_di = 100 * pd.Series(minus_dm, index=close.index).ewm(alpha=1 / period, adjust=False).mean().to_numpy() / (atr + 1e-12)
-    dx = 100 * np.abs(plus_di - minus_di) / (plus_di + minus_di + 1e-12)
-    adx = pd.Series(dx, index=close.index).ewm(alpha=1 / period, adjust=False).mean().to_numpy()
-    return {"adx": adx}
+def _supertrend(data: pd.DataFrame, period: int, mult: float) -> dict[str, np.ndarray]:
+    result = ta.supertrend(data["high"], data["low"], data["close"],
+                           length=period, multiplier=mult)
+    cols = list(result.columns)
+    st_col = [c for c in cols if c.startswith("SUPERT_") and "d" not in c.split("_")[-1]][0]
+    dir_col = [c for c in cols if c.startswith("SUPERTd_")][0]
+    return {
+        "supertrend": result[st_col].to_numpy(dtype=np.float64),
+        "direction": result[dir_col].to_numpy(dtype=np.float64),
+    }
 
 
-def _stoch(high: pd.Series, low: pd.Series, close: pd.Series, k: int, d: int, smooth: int) -> dict[str, np.ndarray]:
-    ll = low.rolling(k).min()
-    hh = high.rolling(k).max()
-    raw_k = 100 * (close - ll) / (hh - ll + 1e-12)
-    k_line = raw_k.rolling(smooth).mean()
-    d_line = k_line.rolling(d).mean()
-    return {"k": k_line.to_numpy(), "d": d_line.to_numpy()}
+def _alligator(data: pd.DataFrame, jaw_period: int, teeth_period: int, lips_period: int) -> dict[str, np.ndarray]:
+    """Bill Williams Alligator: three smoothed moving averages (SMMA).
+
+    Jaw  = SMMA(median_price, jaw_period)   shifted 8 bars forward
+    Teeth = SMMA(median_price, teeth_period) shifted 5 bars forward
+    Lips  = SMMA(median_price, lips_period)  shifted 3 bars forward
+
+    Uses pandas-ta SMA as an approximation of SMMA for the smoothed component,
+    then shifts forward. The shift means the last N values are NaN.
+    """
+    median_price = (data["high"] + data["low"]) / 2.0
+    jaw = ta.sma(median_price, length=jaw_period).shift(8)
+    teeth = ta.sma(median_price, length=teeth_period).shift(5)
+    lips = ta.sma(median_price, length=lips_period).shift(3)
+    return {
+        "jaw": jaw.to_numpy(dtype=np.float64),
+        "teeth": teeth.to_numpy(dtype=np.float64),
+        "lips": lips.to_numpy(dtype=np.float64),
+    }
 
 
-def _psar(high: pd.Series, low: pd.Series, step: float, max_step: float) -> dict[str, np.ndarray]:
-    # Lightweight approximation suitable for MVP smoke usage.
-    mid = (high + low) / 2.0
-    sar = mid.ewm(alpha=min(max(step, 0.001), max_step), adjust=False).mean()
-    return {"psar": sar.to_numpy()}
+# ==========================================================================
+# MOMENTUM INDICATORS / OSCILLATORS (10)
+# ==========================================================================
+
+def _rsi(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.rsi(data["close"], length=period)
+    return {"rsi": result.to_numpy(dtype=np.float64)}
 
 
-def _cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    tp = (high + low + close) / 3.0
-    ma = tp.rolling(period).mean()
-    md = (tp - ma).abs().rolling(period).mean()
-    cci = (tp - ma) / (0.015 * (md + 1e-12))
-    return {"cci": cci.to_numpy()}
+def _stoch(data: pd.DataFrame, k: int, d: int, smooth: int) -> dict[str, np.ndarray]:
+    result = ta.stoch(data["high"], data["low"], data["close"],
+                      k=k, d=d, smooth_k=smooth)
+    cols = list(result.columns)
+    k_col = [c for c in cols if c.startswith("STOCHk_")][0]
+    d_col = [c for c in cols if c.startswith("STOCHd_")][0]
+    return {
+        "k": result[k_col].to_numpy(dtype=np.float64),
+        "d": result[d_col].to_numpy(dtype=np.float64),
+    }
 
 
-def _roc(close: pd.Series, period: int) -> dict[str, np.ndarray]:
-    roc = 100 * (close / close.shift(period) - 1.0)
-    return {"roc": roc.to_numpy()}
+def _cci(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.cci(data["high"], data["low"], data["close"], length=period)
+    return {"cci": result.to_numpy(dtype=np.float64)}
 
 
-def _obv(close: pd.Series, volume: pd.Series) -> dict[str, np.ndarray]:
-    direction = np.sign(close.diff().fillna(0.0))
-    obv = (direction * volume).cumsum()
-    return {"obv": obv.to_numpy()}
+def _willr(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.willr(data["high"], data["low"], data["close"], length=period)
+    return {"willr": result.to_numpy(dtype=np.float64)}
 
 
-def _vwap(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series) -> dict[str, np.ndarray]:
-    tp = (high + low + close) / 3.0
-    cumulative = (tp * volume).cumsum()
-    cum_vol = volume.cumsum() + 1e-12
-    return {"vwap": (cumulative / cum_vol).to_numpy()}
+def _ppo(data: pd.DataFrame, fast: int, slow: int, signal: int) -> dict[str, np.ndarray]:
+    result = ta.ppo(data["close"], fast=fast, slow=slow, signal=signal)
+    cols = list(result.columns)
+    ppo_col = [c for c in cols if c.startswith("PPO_")][0]
+    hist_col = [c for c in cols if c.startswith("PPOh_")][0]
+    sig_col = [c for c in cols if c.startswith("PPOs_")][0]
+    return {
+        "ppo": result[ppo_col].to_numpy(dtype=np.float64),
+        "ppo_signal": result[sig_col].to_numpy(dtype=np.float64),
+        "ppo_hist": result[hist_col].to_numpy(dtype=np.float64),
+    }
 
 
-def _compute(ind: str, data: pd.DataFrame, params: dict) -> dict[str, np.ndarray]:
-    c = data["close"]
-    h = data["high"]
-    l = data["low"]
-    v = data["volume"]
-    if ind == "sma":
-        return _sma(c, params["period"])
-    if ind == "ema":
-        return _ema(c, params["period"])
-    if ind == "wma":
-        return _wma(c, params["period"])
-    if ind == "rsi":
-        return _rsi(c, params["period"])
-    if ind == "macd":
-        return _macd(c, params["fast"], params["slow"], params["signal"])
-    if ind == "bb":
-        return _bb(c, params["period"], params["std"], params["ma_type"])
-    if ind == "atr":
-        return _atr(h, l, c, params["period"])
-    if ind == "keltner":
-        return _keltner(h, l, c, params["ema_period"], params["atr_period"], params["mult"])
-    if ind == "donchian":
-        return _donchian(h, l, params["period"])
-    if ind == "adx":
-        return _adx(h, l, c, params["period"])
-    if ind == "stoch":
-        return _stoch(h, l, c, params["k"], params["d"], params["smooth"])
-    if ind == "psar":
-        return _psar(h, l, params["step"], params["max_step"])
-    if ind == "cci":
-        return _cci(h, l, c, params["period"])
-    if ind == "roc":
-        return _roc(c, params["period"])
-    if ind == "obv":
-        return _obv(c, v)
-    if ind == "vwap":
-        return _vwap(h, l, c, v)
-    raise KeyError(ind)
+def _mfi(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.mfi(data["high"], data["low"], data["close"], data["volume"], length=period)
+    return {"mfi": result.to_numpy(dtype=np.float64)}
 
+
+def _roc(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.roc(data["close"], length=period)
+    return {"roc": result.to_numpy(dtype=np.float64)}
+
+
+def _ao(data: pd.DataFrame, fast: int, slow: int) -> dict[str, np.ndarray]:
+    result = ta.ao(data["high"], data["low"], fast=fast, slow=slow)
+    return {"ao": result.to_numpy(dtype=np.float64)}
+
+
+def _tsi(data: pd.DataFrame, fast: int, slow: int) -> dict[str, np.ndarray]:
+    result = ta.tsi(data["close"], fast=fast, slow=slow)
+    cols = list(result.columns)
+    tsi_col = [c for c in cols if c.startswith("TSI_")][0]
+    sig_col = [c for c in cols if c.startswith("TSIs_")]
+    out = {"tsi": result[tsi_col].to_numpy(dtype=np.float64)}
+    if sig_col:
+        out["tsi_signal"] = result[sig_col[0]].to_numpy(dtype=np.float64)
+    return out
+
+
+def _uo(data: pd.DataFrame, fast: int, medium: int, slow: int) -> dict[str, np.ndarray]:
+    result = ta.uo(data["high"], data["low"], data["close"],
+                   fast=fast, medium=medium, slow=slow)
+    return {"uo": result.to_numpy(dtype=np.float64)}
+
+
+# ==========================================================================
+# VOLATILITY INDICATORS (6)
+# ==========================================================================
+
+def _bb(data: pd.DataFrame, period: int, std: float, ma_type: str) -> dict[str, np.ndarray]:
+    result = ta.bbands(data["close"], length=period, std=std, mamode=ma_type)
+    cols = list(result.columns)
+    lower_col = [c for c in cols if c.startswith("BBL_")][0]
+    mid_col = [c for c in cols if c.startswith("BBM_")][0]
+    upper_col = [c for c in cols if c.startswith("BBU_")][0]
+    return {
+        "upper": result[upper_col].to_numpy(dtype=np.float64),
+        "middle": result[mid_col].to_numpy(dtype=np.float64),
+        "lower": result[lower_col].to_numpy(dtype=np.float64),
+    }
+
+
+def _atr(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.atr(data["high"], data["low"], data["close"], length=period)
+    return {"atr": result.to_numpy(dtype=np.float64)}
+
+
+def _stdev(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.stdev(data["close"], length=period)
+    return {"stdev": result.to_numpy(dtype=np.float64)}
+
+
+def _keltner(data: pd.DataFrame, ema_period: int, atr_period: int, mult: float) -> dict[str, np.ndarray]:
+    result = ta.kc(data["high"], data["low"], data["close"],
+                   length=ema_period, scalar=mult)
+    cols = list(result.columns)
+    lower_col = [c for c in cols if c.startswith("KCL")][0]
+    upper_col = [c for c in cols if c.startswith("KCU")][0]
+    return {
+        "upper": result[upper_col].to_numpy(dtype=np.float64),
+        "lower": result[lower_col].to_numpy(dtype=np.float64),
+    }
+
+
+def _donchian(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.donchian(data["high"], data["low"], lower_length=period, upper_length=period)
+    cols = list(result.columns)
+    lower_col = [c for c in cols if c.startswith("DCL_")][0]
+    upper_col = [c for c in cols if c.startswith("DCU_")][0]
+    return {
+        "upper": result[upper_col].to_numpy(dtype=np.float64),
+        "lower": result[lower_col].to_numpy(dtype=np.float64),
+    }
+
+
+def _chaikin_vol(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    """Chaikin Volatility: rate of change of the EMA of the High-Low range.
+
+    CV = 100 * (EMA(H-L, period) - EMA(H-L, period).shift(period)) / EMA(H-L, period).shift(period)
+    """
+    hl_range = data["high"] - data["low"]
+    ema_range = ta.ema(hl_range, length=period)
+    shifted = ema_range.shift(period)
+    cv = 100.0 * (ema_range - shifted) / (shifted.abs() + 1e-12)
+    return {"chaikin_vol": cv.to_numpy(dtype=np.float64)}
+
+
+# ==========================================================================
+# VOLUME & BREADTH INDICATORS (4)
+# ==========================================================================
+
+def _obv(data: pd.DataFrame) -> dict[str, np.ndarray]:
+    result = ta.obv(data["close"], data["volume"])
+    return {"obv": result.to_numpy(dtype=np.float64)}
+
+
+def _ad(data: pd.DataFrame) -> dict[str, np.ndarray]:
+    result = ta.ad(data["high"], data["low"], data["close"], data["volume"])
+    return {"ad": result.to_numpy(dtype=np.float64)}
+
+
+def _cmf(data: pd.DataFrame, period: int) -> dict[str, np.ndarray]:
+    result = ta.cmf(data["high"], data["low"], data["close"], data["volume"], length=period)
+    return {"cmf": result.to_numpy(dtype=np.float64)}
+
+
+def _vwap(data: pd.DataFrame) -> dict[str, np.ndarray]:
+    result = ta.vwap(data["high"], data["low"], data["close"], data["volume"])
+    return {"vwap": result.to_numpy(dtype=np.float64)}
+
+
+# ==========================================================================
+# Registry builder
+# ==========================================================================
 
 def make_default_registry() -> list[IndicatorDef]:
+    """Build the full default indicator registry (29 indicators)."""
     defs = [
-        IndicatorDef("sma", {"period": [5, 8, 10, 13, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200]}, ["ma"], lambda d, **p: _compute("sma", d, p)),
-        IndicatorDef("ema", {"period": [5, 8, 10, 13, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200]}, ["ma"], lambda d, **p: _compute("ema", d, p)),
-        IndicatorDef("wma", {"period": [10, 20, 50, 100, 200]}, ["ma"], lambda d, **p: _compute("wma", d, p)),
-        IndicatorDef("rsi", {"period": [7, 9, 10, 12, 14, 16, 21]}, ["rsi"], lambda d, **p: _compute("rsi", d, p)),
-        IndicatorDef("macd", {"fast": [8, 10, 12, 15], "slow": [21, 24, 26, 30], "signal": [7, 9, 12]}, ["macd", "signal", "hist"], lambda d, **p: _compute("macd", d, p), constraints=lambda params: params["fast"] < params["slow"]),
-        IndicatorDef("bb", {"period": [10, 15, 20, 25, 30, 40, 50], "std": [1.5, 1.75, 2.0, 2.25, 2.5, 3.0], "ma_type": ["sma", "ema"]}, ["upper", "middle", "lower"], lambda d, **p: _compute("bb", d, p)),
-        IndicatorDef("atr", {"period": [7, 10, 14, 20]}, ["atr"], lambda d, **p: _compute("atr", d, p)),
-        IndicatorDef("keltner", {"ema_period": [10, 15, 20, 30], "atr_period": [10, 14, 20], "mult": [1.5, 2.0, 2.5]}, ["upper", "lower"], lambda d, **p: _compute("keltner", d, p)),
-        IndicatorDef("donchian", {"period": [10, 20, 30, 50, 100]}, ["upper", "lower"], lambda d, **p: _compute("donchian", d, p)),
-        IndicatorDef("adx", {"period": [10, 14, 20]}, ["adx"], lambda d, **p: _compute("adx", d, p)),
-        IndicatorDef("stoch", {"k": [5, 9, 14, 21], "d": [3, 5, 7], "smooth": [3, 5]}, ["k", "d"], lambda data, **p: _compute("stoch", data, p)),
-        IndicatorDef("psar", {"step": [0.01, 0.02, 0.05], "max_step": [0.1, 0.2, 0.3]}, ["psar"], lambda d, **p: _compute("psar", d, p)),
-        IndicatorDef("cci", {"period": [10, 14, 20]}, ["cci"], lambda d, **p: _compute("cci", d, p)),
-        IndicatorDef("roc", {"period": [5, 10, 14, 20]}, ["roc"], lambda d, **p: _compute("roc", d, p)),
-        IndicatorDef("obv", {}, ["obv"], lambda d, **p: _compute("obv", d, p)),
-        IndicatorDef("vwap", {}, ["vwap"], lambda d, **p: _compute("vwap", d, p)),
+        # ---- TREND (10) ----
+        IndicatorDef("sma",
+                     {"period": [5, 8, 10, 13, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200]},
+                     ["ma"],
+                     lambda d, **p: _sma(d, p["period"])),
+        IndicatorDef("ema",
+                     {"period": [5, 8, 10, 13, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200]},
+                     ["ma"],
+                     lambda d, **p: _ema(d, p["period"])),
+        IndicatorDef("wma",
+                     {"period": [10, 20, 50, 100, 200]},
+                     ["ma"],
+                     lambda d, **p: _wma(d, p["period"])),
+        IndicatorDef("macd",
+                     {"fast": [8, 10, 12, 15], "slow": [21, 24, 26, 30], "signal": [7, 9, 12]},
+                     ["macd", "signal", "hist"],
+                     lambda d, **p: _macd(d, p["fast"], p["slow"], p["signal"]),
+                     constraints=lambda params: params["fast"] < params["slow"]),
+        IndicatorDef("psar",
+                     {"step": [0.01, 0.02, 0.05], "max_step": [0.1, 0.2, 0.3]},
+                     ["psar"],
+                     lambda d, **p: _psar(d, p["step"], p["max_step"])),
+        IndicatorDef("adx",
+                     {"period": [10, 14, 20]},
+                     ["adx"],
+                     lambda d, **p: _adx(d, p["period"])),
+        IndicatorDef("ichimoku",
+                     {"tenkan": [7, 9, 12], "kijun": [22, 26, 30], "senkou": [44, 52, 60]},
+                     ["tenkan", "kijun", "senkou_a", "senkou_b"],
+                     lambda d, **p: _ichimoku(d, p["tenkan"], p["kijun"], p["senkou"])),
+        IndicatorDef("aroon",
+                     {"period": [10, 14, 20, 25]},
+                     ["aroon_up", "aroon_down", "aroon_osc"],
+                     lambda d, **p: _aroon(d, p["period"])),
+        IndicatorDef("supertrend",
+                     {"period": [7, 10, 14, 20], "mult": [1.5, 2.0, 2.5, 3.0]},
+                     ["supertrend", "direction"],
+                     lambda d, **p: _supertrend(d, p["period"], p["mult"])),
+        IndicatorDef("alligator",
+                     {"jaw_period": [13, 21], "teeth_period": [8, 13], "lips_period": [5, 8]},
+                     ["jaw", "teeth", "lips"],
+                     lambda d, **p: _alligator(d, p["jaw_period"], p["teeth_period"], p["lips_period"]),
+                     constraints=lambda p: p["jaw_period"] > p["teeth_period"] > p["lips_period"]),
+
+        # ---- MOMENTUM / OSCILLATORS (10) ----
+        IndicatorDef("rsi",
+                     {"period": [7, 9, 10, 12, 14, 16, 21]},
+                     ["rsi"],
+                     lambda d, **p: _rsi(d, p["period"])),
+        IndicatorDef("stoch",
+                     {"k": [5, 9, 14, 21], "d": [3, 5, 7], "smooth": [3, 5]},
+                     ["k", "d"],
+                     lambda d, **p: _stoch(d, p["k"], p["d"], p["smooth"])),
+        IndicatorDef("cci",
+                     {"period": [10, 14, 20]},
+                     ["cci"],
+                     lambda d, **p: _cci(d, p["period"])),
+        IndicatorDef("willr",
+                     {"period": [7, 10, 14, 21]},
+                     ["willr"],
+                     lambda d, **p: _willr(d, p["period"])),
+        IndicatorDef("ppo",
+                     {"fast": [8, 10, 12], "slow": [21, 26, 30], "signal": [7, 9, 12]},
+                     ["ppo", "ppo_signal", "ppo_hist"],
+                     lambda d, **p: _ppo(d, p["fast"], p["slow"], p["signal"]),
+                     constraints=lambda params: params["fast"] < params["slow"]),
+        IndicatorDef("mfi",
+                     {"period": [7, 10, 14, 21]},
+                     ["mfi"],
+                     lambda d, **p: _mfi(d, p["period"])),
+        IndicatorDef("roc",
+                     {"period": [5, 10, 14, 20]},
+                     ["roc"],
+                     lambda d, **p: _roc(d, p["period"])),
+        IndicatorDef("ao",
+                     {"fast": [5, 7], "slow": [21, 34]},
+                     ["ao"],
+                     lambda d, **p: _ao(d, p["fast"], p["slow"])),
+        IndicatorDef("tsi",
+                     {"fast": [10, 13], "slow": [21, 25]},
+                     ["tsi", "tsi_signal"],
+                     lambda d, **p: _tsi(d, p["fast"], p["slow"])),
+        IndicatorDef("uo",
+                     {"fast": [5, 7], "medium": [10, 14], "slow": [21, 28]},
+                     ["uo"],
+                     lambda d, **p: _uo(d, p["fast"], p["medium"], p["slow"])),
+
+        # ---- VOLATILITY (6) ----
+        IndicatorDef("bb",
+                     {"period": [10, 15, 20, 25, 30, 40, 50],
+                      "std": [1.5, 1.75, 2.0, 2.25, 2.5, 3.0],
+                      "ma_type": ["sma", "ema"]},
+                     ["upper", "middle", "lower"],
+                     lambda d, **p: _bb(d, p["period"], p["std"], p["ma_type"])),
+        IndicatorDef("atr",
+                     {"period": [7, 10, 14, 20]},
+                     ["atr"],
+                     lambda d, **p: _atr(d, p["period"])),
+        IndicatorDef("stdev",
+                     {"period": [10, 14, 20, 30]},
+                     ["stdev"],
+                     lambda d, **p: _stdev(d, p["period"])),
+        IndicatorDef("keltner",
+                     {"ema_period": [10, 15, 20, 30], "atr_period": [10, 14, 20], "mult": [1.5, 2.0, 2.5]},
+                     ["upper", "lower"],
+                     lambda d, **p: _keltner(d, p["ema_period"], p["atr_period"], p["mult"])),
+        IndicatorDef("donchian",
+                     {"period": [10, 20, 30, 50, 100]},
+                     ["upper", "lower"],
+                     lambda d, **p: _donchian(d, p["period"])),
+        IndicatorDef("chaikin_vol",
+                     {"period": [10, 14, 20]},
+                     ["chaikin_vol"],
+                     lambda d, **p: _chaikin_vol(d, p["period"])),
+
+        # ---- VOLUME & BREADTH (4) ----
+        IndicatorDef("obv", {}, ["obv"],
+                     lambda d, **p: _obv(d)),
+        IndicatorDef("ad", {}, ["ad"],
+                     lambda d, **p: _ad(d)),
+        IndicatorDef("cmf",
+                     {"period": [10, 14, 20, 30]},
+                     ["cmf"],
+                     lambda d, **p: _cmf(d, p["period"])),
+        IndicatorDef("vwap", {}, ["vwap"],
+                     lambda d, **p: _vwap(d)),
     ]
     return defs
 
 
 DEFAULT_REGISTRY = make_default_registry()
 
+
+# ==========================================================================
+# Config overrides and filtering utilities
+# ==========================================================================
 
 def _expand_range_spec(value: Any) -> list[Any]:
     if isinstance(value, dict):

@@ -7,7 +7,11 @@ from typing import Any
 from cobra_py.indicators.registry import IndicatorDef
 
 _RATIO_STEP_VALUES = [round(x, 4) for x in [i / 1000.0 for i in range(5, 201, 5)]]
-_RSI_THRESHOLDS = [float(x) for x in range(10, 91, 5)]
+_RSI_THRESHOLDS = [float(x) for x in [
+    -200, -150, -100, -80, -60, -50, -40, -30, -20, -10,
+    0, 10, 15, 20, 25, 30, 35, 40, 45, 50,
+    55, 60, 65, 70, 75, 80, 85, 90, 100, 150, 200,
+]]
 _SL_ATR_MULT_VALUES = [round(x, 2) for x in [i / 4.0 for i in range(4, 17)]]
 _TP_ATR_MULT_VALUES = [round(x, 2) for x in [i / 4.0 for i in range(4, 25)]]
 _TP_RR_VALUES = [round(x, 2) for x in [i / 4.0 for i in range(4, 21)]]
@@ -169,7 +173,12 @@ class SimpleConfigSpace:
     def _threshold_capable(self, indicator_name: str, archetype: str) -> bool:
         if str(archetype) in {"band_test", "pattern"}:
             return False
-        return str(indicator_name) in {"rsi", "stoch", "cci", "roc", "adx"}
+        # Oscillators and indicators with meaningful numeric threshold comparisons
+        return str(indicator_name) in {
+            "rsi", "stoch", "cci", "roc", "adx",         # original
+            "willr", "mfi", "ao", "tsi", "uo",            # new momentum oscillators
+            "aroon", "ppo", "cmf", "chaikin_vol", "stdev", # new trend/vol/volume
+        }
 
     def _set_rule_indicator_params_from_rng(self, rng: random.Random, prefix: str, indicator_name: str, cfg: dict[str, Any]) -> None:
         ind = self._indicator(indicator_name)
