@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pandas as pd
 import pytest
 
+from cobra_py.backtest.engine import run_backtest
+from cobra_py.helpers import find_strategy
 from cobra_py.helpers import _run_with_optimiser
 from cobra_py.helpers import _extract_ohlcv_from_yfinance
 from cobra_py.helpers import list_available_objectives, list_available_optimisers, summarise_reports
@@ -216,3 +220,50 @@ def test_extract_ohlcv_from_yfinance_drops_nan_core_ohlc_rows() -> None:
 def test_plot_equity_curves_rejects_unknown_backend():
     with pytest.raises(ValueError, match="backend"):
         plot_equity_curves({}, backend="unknown")
+
+
+def test_run_backtest_exposes_trade_returns(sample_ohlcv_data, small_cache, simple_policy):
+    metrics = run_backtest(simple_policy, small_cache, sample_ohlcv_data.iloc[:300], {"init_cash": 10000.0})
+    assert "trade_returns" in metrics
+
+
+def test_find_strategy_returns_structured_object(monkeypatch):
+    idx = pd.date_range("2024-01-01", periods=3, freq="D")
+
+    @dataclass
+    class _StubOptimiserResult:
+        best_policy: object
+
+    def _fake_run_optimiser(**kwargs):
+        return {
+            "config": {"objective": {"name": "sharpe"}},
+            "train": pd.DataFrame({"close": [100.0, 101.0, 102.0]}, index=idx),
+            "test": pd.DataFrame(),
+            "result": _StubOptimiserResult(best_policy={"ok": True}),
+            "report": {
+                "summary": {"optimiser_name": "dehb", "objective": "sharpe"},
+                "best_metrics": {
+                    "equity_curve": [10000.0, 10100.0, 10200.0],
+                    "trade_returns": [0.01, -0.005],
+                    "sharpe_ratio": 1.1,
+                },
+                "policy_human_readable": "Entry conditions (...)",
+            },
+            "oos_metrics": None,
+            "walk_forward": None,
+        }
+
+    monkeypatch.setattr("cobra_py.helpers.run_optimiser", _fake_run_optimiser)
+    monkeypatch.setattr("cobra_py.helpers.plot_equity_curves", lambda *args, **kwargs: "chart")
+
+    result = find_strategy(pd.DataFrame({"close": [1.0, 2.0]}))
+
+    assert list(result.equity_curve.index) == list(idx)
+    assert result.metrics["sharpe_ratio"] == 1.1
+    assert len(result.trade_history) == 2
+    assert result.trade_history["trade_id"].tolist() == [1, 2]
+    assert result.rules.startswith("Entry conditions")
+    assert result.equity_chart == "chart"
+    assert result.backend == "cobra_py_native"
+    assert result.raw_backend_object is None
+    assert result.train_data is not None

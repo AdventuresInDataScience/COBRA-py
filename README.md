@@ -71,6 +71,21 @@ fig = plot_equity_curves(
 fig.show()
 ```
 
+Minimal single-run helper flow:
+
+```python
+from cobra_py import fetch_yfinance_ohlcv, find_strategy, load_config
+
+cfg = load_config("configs/default.yaml")
+data = fetch_yfinance_ohlcv("SPY", start="2018-01-01", interval="1d")
+result = find_strategy(data, config=cfg)
+
+print(result.metrics["cagr"])
+print(result.rules)
+print(result.equity_curve.head())  # Date-indexed series
+print(result.trade_history.head())
+```
+
 ## Repository Structure
 
 Core project layout and purpose:

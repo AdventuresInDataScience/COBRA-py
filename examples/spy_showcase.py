@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from cobra_py import fetch_yfinance_ohlcv, load_config, run_optimiser, summarise_reports
+from cobra_py import fetch_yfinance_ohlcv, find_strategy, load_config, summarise_reports
 
 
 def find_project_root(start: Path) -> Path:
@@ -159,7 +159,7 @@ run_curves: dict[str, dict] = {}
 for scenario in scenarios:
     print("Running:", scenario["name"])
     out_dir = showcase_dir / scenario["name"]
-    out = run_optimiser(
+    result = find_strategy(
         source=spy,
         config=base_cfg,
         overrides=scenario["overrides"],
@@ -167,29 +167,29 @@ for scenario in scenarios:
         run_walk_forward=False,
         evaluate_oos=True,
     )
-    named_reports[scenario["name"]] = out["report"]
+    named_reports[scenario["name"]] = result.report
 
-    strategy_text = str(out["report"].get("policy_human_readable", ""))
+    strategy_text = result.rules
     print(f"\nStrategy for {scenario['name']}:\n{strategy_text}\n")
 
     strategy_txt = out_dir / "strategy.txt"
     strategy_txt.write_text(strategy_text + "\n", encoding="utf-8")
 
     with (out_dir / "effective_config.yaml").open("w", encoding="utf-8") as f:
-        yaml.safe_dump(out["config"], f, sort_keys=False)
+        yaml.safe_dump(result.config, f, sort_keys=False)
 
-    summary = out["report"]["summary"]
-    strategy_eq = np.asarray(out["report"].get("best_metrics", {}).get("equity_curve", []), dtype=float)
-    close_train = out["train"]["close"].to_numpy(dtype=float)
-    init_cash = float(out["config"]["backtest"].get("init_cash", 10000.0))
+    summary = result.report["summary"]
+    strategy_eq = np.asarray(result.metrics.get("equity_curve", []), dtype=float)
+    close_train = result.train_data["close"].to_numpy(dtype=float)
+    init_cash = float(result.config["backtest"].get("init_cash", 10000.0))
     buyhold_eq = init_cash * (close_train / max(close_train[0], 1e-12))
 
     strategy_perf = compute_perf(strategy_eq)
     bh_perf = compute_perf(buyhold_eq)
-    oos = out.get("oos_metrics") or {}
+    oos = result.oos_metrics or {}
 
     run_curves[scenario["name"]] = {
-        "index": out["train"].index,
+        "index": result.train_data.index,
         "strategy_eq": strategy_eq,
         "buyhold_eq": buyhold_eq,
     }

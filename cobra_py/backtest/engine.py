@@ -173,5 +173,6 @@ def run_backtest(policy: Policy, cache: IndicatorCache, data: pd.DataFrame, conf
     )
     metrics = extract_metrics(raw, freq=freq, risk_free_rate_annual=risk_free_rate_annual)
     metrics["equity_curve"] = raw["equity_curve"]
+    metrics["trade_returns"] = raw["trade_returns"]
     return metrics
 

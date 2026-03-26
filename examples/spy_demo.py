@@ -10,11 +10,11 @@ import yaml
 
 from cobra_py import (
     fetch_yfinance_ohlcv,
+    find_strategy,
     list_available_objectives,
     list_available_optimisers,
     load_config,
     plot_equity_curves,
-    run_optimiser,
     summarise_reports,
 )
 
@@ -95,7 +95,7 @@ named_reports: dict[str, dict] = {}
 for run_name, overrides in runs.items():
     print("Running:", run_name)
     out_dir = results_dir / run_name
-    result = run_optimiser(
+    result = find_strategy(
         source=spy_ohlcv,
         config=base_cfg,
         overrides=overrides,
@@ -103,14 +103,14 @@ for run_name, overrides in runs.items():
         run_walk_forward=False,
         evaluate_oos=True,
     )
-    named_reports[run_name] = result["report"]
+    named_reports[run_name] = result.report
 
     with (out_dir / "effective_config.yaml").open("w", encoding="utf-8") as f:
-        yaml.safe_dump(result["config"], f, sort_keys=False)
+        yaml.safe_dump(result.config, f, sort_keys=False)
 
-    print(f"\nStrategy for {run_name}:\n{result['report'].get('policy_human_readable', '')}\n")
-    if result.get("oos_metrics"):
-        oos = result["oos_metrics"]
+    print(f"\nStrategy for {run_name}:\n{result.rules}\n")
+    if result.oos_metrics:
+        oos = result.oos_metrics
         print(
             "OOS metrics:",
             {

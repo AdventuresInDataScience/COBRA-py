@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 import re
@@ -20,6 +21,26 @@ from cobra_py.search.nevergrad_runner import run_nevergrad
 from cobra_py.search.space import build_config_space
 from cobra_py.search.tpe_runner import run_tpe
 from cobra_py.validation.walk_forward import walk_forward_validate
+
+
+@dataclass
+class StrategyResult:
+    metrics: dict[str, Any]
+    trade_history: pd.DataFrame
+    equity_curve: pd.Series
+    equity_chart: Any
+    policy: Any
+    rules: str
+    report: dict[str, Any]
+    config: dict[str, Any]
+    optimiser: str
+    objective: str
+    oos_metrics: dict[str, Any] | None = None
+    train_data: pd.DataFrame | None = None
+    test_data: pd.DataFrame | None = None
+    walk_forward: Any = None
+    backend: str = "cobra_py_native"
+    raw_backend_object: Any = None
 
 
 def deep_update(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
@@ -302,6 +323,77 @@ def run_optimiser(
         "oos_metrics": oos_metrics,
         "walk_forward": wf_result,
     }
+
+
+def find_strategy(
+    source: str | Path | pd.DataFrame,
+    config: dict[str, Any] | None = None,
+    config_path: str | Path | None = None,
+    overrides: dict[str, Any] | None = None,
+    output_path: str | Path | None = None,
+    run_walk_forward: bool = False,
+    evaluate_oos: bool = False,
+    chart_backend: str = "matplotlib",
+    chart_normalize: bool = False,
+    chart_title: str = "Strategy Equity Curve",
+) -> StrategyResult:
+    out = run_optimiser(
+        source=source,
+        config=config,
+        config_path=config_path,
+        overrides=overrides,
+        output_path=output_path,
+        run_walk_forward=run_walk_forward,
+        evaluate_oos=evaluate_oos,
+    )
+
+    report = out["report"]
+    best_metrics = dict(report.get("best_metrics", {}))
+
+    equity_raw = np.asarray(best_metrics.get("equity_curve", []), dtype=float)
+    train_index = out["train"].index
+    if len(equity_raw) == len(train_index):
+        eq_index = train_index
+    else:
+        eq_index = train_index[-len(equity_raw) :] if len(equity_raw) > 0 else train_index[:0]
+    equity_curve = pd.Series(equity_raw, index=eq_index, name="equity")
+
+    trade_returns = np.asarray(best_metrics.get("trade_returns", []), dtype=float)
+    trade_history = pd.DataFrame(
+        {
+            "trade_id": np.arange(1, len(trade_returns) + 1, dtype=int),
+            "return": trade_returns,
+        }
+    )
+
+    named = {"strategy": report}
+    x_index = {"strategy": eq_index}
+    chart = plot_equity_curves(
+        named,
+        normalize=bool(chart_normalize),
+        title=chart_title,
+        backend=chart_backend,
+        x_index=x_index,
+    )
+
+    return StrategyResult(
+        metrics=best_metrics,
+        trade_history=trade_history,
+        equity_curve=equity_curve,
+        equity_chart=chart,
+        policy=out["result"].best_policy,
+        rules=str(report.get("policy_human_readable", "")),
+        report=report,
+        config=out["config"],
+        optimiser=str(report.get("summary", {}).get("optimiser_name", "")),
+        objective=str(report.get("summary", {}).get("objective", "")),
+        oos_metrics=out.get("oos_metrics"),
+        train_data=out.get("train"),
+        test_data=out.get("test"),
+        walk_forward=out.get("walk_forward"),
+        backend="cobra_py_native",
+        raw_backend_object=None,
+    )
 
 
 def summarise_reports(named_reports: dict[str, dict[str, Any]]) -> pd.DataFrame:
