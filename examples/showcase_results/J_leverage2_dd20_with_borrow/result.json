@@ -7,7 +7,7 @@
     "best_metric_name": "Total return (DD constrained)",
     "best_metric_value": 0.0,
     "n_evaluations": 100,
-    "runtime_seconds": 0.5815043449401855
+    "runtime_seconds": 7.225255727767944
   },
   "best_metrics": {
     "total_return": 0.0,
@@ -1795,33 +1795,19 @@
       10000.0,
       10000.0,
       10000.0,
+      10000.0,
       10000.0
-    ]
+    ],
+    "trade_returns": []
   },
-  "policy_human_readable": "Entry conditions (ALL must be true simultaneously):\n  Rule 1: sma(5,) crosses_above price\n  Rule 2: sma(5,) > price\n  Rule 3: ema(8,) crosses_above price\n\nExit conditions:\n  Rule 1: ema(5,) < price\n\nStop-loss: atr_mult (1.0, 10)\nTake-profit: atr_mult (1.0, 7)",
+  "policy_human_readable": "Entry conditions (logic: AND, all rules must be true):\n  Rule 1: sma(8,).ma > price\n\nExit conditions (logic: AND, all rules must be true):\n  Rule 1: ema(8,).ma crosses_above price\n\nStop-loss: pct (0.01,)\nTake-profit: pct (0.005,)",
   "best_policy": {
     "entry_rules": [
-      {
-        "archetype": "crossover",
-        "indicator": "sma",
-        "params": [
-          5
-        ],
-        "output": "ma",
-        "operator": "crosses_above",
-        "comparand": "price",
-        "indicator2": null,
-        "params2": null,
-        "output2": null,
-        "lookback": 5,
-        "band_side": "upper",
-        "group_id": 1
-      },
       {
         "archetype": "comparison",
         "indicator": "sma",
         "params": [
-          5
+          8
         ],
         "output": "ma",
         "operator": ">",
@@ -1831,8 +1817,10 @@
         "output2": null,
         "lookback": 5,
         "band_side": "upper",
-        "group_id": 0
-      },
+        "group_id": 1
+      }
+    ],
+    "exit_rules": [
       {
         "archetype": "crossover",
         "indicator": "ema",
@@ -1850,41 +1838,21 @@
         "group_id": 0
       }
     ],
-    "exit_rules": [
-      {
-        "archetype": "comparison",
-        "indicator": "ema",
-        "params": [
-          5
-        ],
-        "output": "ma",
-        "operator": "<",
-        "comparand": "price",
-        "indicator2": null,
-        "params2": null,
-        "output2": null,
-        "lookback": 5,
-        "band_side": "middle",
-        "group_id": 0
-      }
-    ],
     "sl_config": {
-      "sl_type": "atr_mult",
+      "sl_type": "pct",
       "params": [
-        1.0,
-        10
+        0.01
       ]
     },
     "tp_config": {
-      "tp_type": "atr_mult",
+      "tp_type": "pct",
       "params": [
-        1.0,
-        7
+        0.005
       ]
     },
-    "n_active_entry": 3,
+    "n_active_entry": 1,
     "n_active_exit": 1,
-    "entry_logic": "or",
+    "entry_logic": "and",
     "exit_logic": "and"
   },
   "walk_forward": null

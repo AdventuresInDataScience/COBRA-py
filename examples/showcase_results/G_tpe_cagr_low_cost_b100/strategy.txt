@@ -1,9 +1,8 @@
-Entry conditions (ALL must be true simultaneously):
-  Rule 1: rsi(16,) > 70.0
-  Rule 2: keltner(10, 10, 1.5) < price
+Entry conditions (logic: OR, any rule can trigger):
+  Rule 1: roc(10,).roc < 85.0
 
-Exit conditions:
-  Rule 1: atr(20,) > price
+Exit conditions (logic: DNF, OR across group-wise AND clauses):
+  (none - exits driven by stop-loss and take-profit only)
 
-Stop-loss: bb_lower (20, 2.0, 'sma')
-Take-profit: atr_mult (5.75, 7)
+Stop-loss: atr_mult (2.0, 7)
+Take-profit: bb_upper (20, 2.0, 'sma')

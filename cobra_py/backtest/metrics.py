@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+from typing import Any
 
 
 SENTINEL_BAD = -999.0
@@ -46,10 +47,48 @@ def _cagr(equity: np.ndarray, ann_factor: float) -> float:
     return float((equity[-1] / equity[0]) ** (1.0 / years) - 1.0)
 
 
-def extract_metrics(results: dict, freq: str = "1D", risk_free_rate_annual: float = 0.0) -> dict:
-    equity = np.asarray(results.get("equity_curve", []), dtype=float)
-    trade_returns = np.asarray(results.get("trade_returns", []), dtype=float)
-    n_trades = int(results.get("n_trades", 0))
+def _to_scalar(x: Any) -> float:
+    arr = np.asarray(x)
+    if arr.size == 0:
+        return np.nan
+    return float(arr.reshape(-1)[-1])
+
+
+def _maybe_call(x: Any) -> Any:
+    return x() if callable(x) else x
+
+
+def _extract_series_from_portfolio(portfolio: Any) -> tuple[np.ndarray, np.ndarray, int]:
+    equity_obj = _maybe_call(portfolio.value)
+    records = portfolio.trades.records_readable
+
+    if hasattr(equity_obj, "to_numpy"):
+        equity = np.asarray(equity_obj.to_numpy(), dtype=float)
+    else:
+        equity = np.asarray(equity_obj, dtype=float)
+
+    if "Return" in records:
+        trade_returns = np.asarray(records["Return"].to_numpy(), dtype=float)
+    else:
+        trade_returns_obj = _maybe_call(portfolio.trades.returns)
+        if hasattr(trade_returns_obj, "to_pd"):
+            trade_returns = np.asarray(trade_returns_obj.to_pd().dropna().to_numpy(), dtype=float)
+        elif hasattr(trade_returns_obj, "to_numpy"):
+            trade_returns = np.asarray(trade_returns_obj.to_numpy(), dtype=float)
+        else:
+            trade_returns = np.asarray(trade_returns_obj, dtype=float)
+
+    n_trades = int(len(trade_returns))
+    return equity, trade_returns, n_trades
+
+
+def extract_metrics(results: Any, freq: str = "1D", risk_free_rate_annual: float = 0.0) -> dict:
+    if hasattr(results, "value") and hasattr(results, "trades"):
+        equity, trade_returns, n_trades = _extract_series_from_portfolio(results)
+    else:
+        equity = np.asarray(results.get("equity_curve", []), dtype=float)
+        trade_returns = np.asarray(results.get("trade_returns", []), dtype=float)
+        n_trades = int(results.get("n_trades", 0))
 
     if len(equity) < 2:
         return {

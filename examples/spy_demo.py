@@ -48,7 +48,7 @@ print("Available objectives:", list_available_objectives())
 
 # %% 3. Base config and data
 base_cfg = load_config(project_root / "configs" / "default.yaml")
-demo_budget = int(os.getenv("COBRA_EXAMPLE_BUDGET", str(base_cfg["optimiser"].get("budget", 100))))
+demo_budget = int(os.getenv("COBRA_EXAMPLE_BUDGET", str(base_cfg["optimiser"].get("budget", 200))))
 base_cfg["optimiser"]["budget"] = max(10, demo_budget)
 base_cfg["indicators"]["n_jobs"] = 1
 
@@ -59,17 +59,17 @@ print("Date range:", spy_ohlcv.index.min().date(), "to", spy_ohlcv.index.max().d
 
 # %% 4. Diverse runs (optimiser + objective combinations)
 runs = {
-    f"dehb_sharpe_b{demo_budget}": {
+    f"dehb_cagr_b{demo_budget}": {
         "optimiser": {"name": "dehb", "budget": demo_budget, "seed": 42},
-        "objective": {"name": "sharpe", "min_trades": 1},
+        "objective": {"name": "cagr", "min_trades": 1},
     },
-    f"nevergrad_sortino_b{demo_budget}": {
+    f"nevergrad_cagr_b{demo_budget}": {
         "optimiser": {"name": "nevergrad", "budget": demo_budget, "seed": 42},
-        "objective": {"name": "sortino", "min_trades": 1},
+        "objective": {"name": "cagr", "min_trades": 1},
     },
-    f"tpe_ulcer_b{demo_budget}": {
+    f"tpe_cagr_b{demo_budget}": {
         "optimiser": {"name": "tpe", "budget": demo_budget, "seed": 42},
-        "objective": {"name": "ulcer", "min_trades": 1},
+        "objective": {"name": "cagr", "min_trades": 1},
     },
     f"dehb_composite_b{demo_budget}": {
         "optimiser": {"name": "dehb", "budget": demo_budget, "seed": 123},

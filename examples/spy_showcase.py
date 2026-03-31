@@ -34,7 +34,7 @@ print("Showcase dir:", showcase_dir)
 
 # %% 2. Load config and data
 base_cfg = load_config(project_root / "configs" / "default.yaml")
-showcase_budget = int(os.getenv("COBRA_EXAMPLE_BUDGET", str(base_cfg["optimiser"].get("budget", 100))))
+showcase_budget = int(os.getenv("COBRA_EXAMPLE_BUDGET", str(base_cfg["optimiser"].get("budget", 150))))
 base_cfg["optimiser"]["budget"] = max(10, showcase_budget)
 base_cfg["indicators"]["n_jobs"] = 1
 
@@ -112,9 +112,9 @@ scenarios: list[dict] = [
     {
         "name": f"G_tpe_cagr_low_cost_b{showcase_budget}",
         "overrides": {
-            "optimiser": {"name": "tpe", "budget": showcase_budget, "seed": 7},
+            "optimiser": {"name": "tpe", "budget": showcase_budget, "seed": 17},
             "objective": {"name": "cagr", "min_trades": 1},
-            "backtest": {"fee_rate": 0.0002, "slippage": 0.0001},
+            "backtest": {"fee_rate": 0.0005, "slippage": 0.0005},
         },
     },
     {
@@ -122,7 +122,7 @@ scenarios: list[dict] = [
         "overrides": {
             "optimiser": {"name": "nevergrad", "budget": showcase_budget, "seed": 7},
             "objective": {"name": "calmar", "min_trades": 1},
-            "backtest": {"fee_rate": 0.0020, "slippage": 0.0010},
+            "backtest": {"fee_rate": 0.0020, "slippage": 0.0005},
         },
     },
     {
@@ -132,7 +132,7 @@ scenarios: list[dict] = [
             "objective": {"name": "sharpe", "min_trades": 1},
             "indicators": {
                 "include": ["sma", "ema", "rsi", "macd", "bb", "atr"],
-                "param_ranges": {"rsi": {"period": [7, 14, 21]}, "bb": {"period": [20, 30], "std": [2.0, 2.5], "ma_type": ["sma", "ema"]}},
+                "param_ranges": {"rsi": {"period": [7, 14, 21]}, "bb": {"period": [10, 200], "std": [1.0, 3.0], "ma_type": ["sma", "ema"]}},
             },
         },
     },
@@ -181,7 +181,7 @@ for scenario in scenarios:
     summary = result.report["summary"]
     strategy_eq = np.asarray(result.metrics.get("equity_curve", []), dtype=float)
     close_train = result.train_data["close"].to_numpy(dtype=float)
-    init_cash = float(result.config["backtest"].get("init_cash", 10000.0))
+    init_cash = float(result.config["backtest"].get("init_cash", 15000.0))
     buyhold_eq = init_cash * (close_train / max(close_train[0], 1e-12))
 
     strategy_perf = compute_perf(strategy_eq)
