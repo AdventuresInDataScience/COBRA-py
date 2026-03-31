@@ -3,8 +3,12 @@
 from typing import Any
 
 from cobra_py.indicators.cache import IndicatorCache
+from cobra_py.indicators.registry import DEFAULT_REGISTRY
 
 from .schema import Policy, RuleConfig, SLConfig, TPConfig
+
+
+_REGISTRY_BY_NAME = {ind.name: ind for ind in DEFAULT_REGISTRY}
 
 
 def _indicator_params_output(prefix: str, indicator: str, config: dict[str, Any]) -> tuple[tuple, str]:
@@ -18,7 +22,7 @@ def _indicator_params_output(prefix: str, indicator: str, config: dict[str, Any]
         params = (
             int(config.get(f"{prefix}_bb_period", 20)),
             float(config.get(f"{prefix}_bb_std", 2.0)),
-            str(config.get(f"{prefix}_bb_matype", "sma")),
+            str(config.get(f"{prefix}_bb_ma_type", "sma")),
         )
         return params, str(config.get(f"{prefix}_bb_output", "middle"))
     if indicator == "macd":
@@ -62,8 +66,18 @@ def _indicator_params_output(prefix: str, indicator: str, config: dict[str, Any]
     if indicator == "vwap":
         return (), "vwap"
 
+    reg = _REGISTRY_BY_NAME.get(str(indicator))
+    if reg is not None:
+        params = tuple(
+            config.get(f"{prefix}_{indicator}_{p_name}", p_values[0])
+            for p_name, p_values in reg.param_grid.items()
+        )
+        default_output = reg.outputs[0] if reg.outputs else "ma"
+        output = str(config.get(f"{prefix}_{indicator}_output", config.get(f"{prefix}_output", default_output)))
+        return params, output
+
     params = (int(config.get(f"{prefix}_{indicator}_period", 14)),)
-    return params, str(config.get(f"{prefix}_output", "ma"))
+    return params, str(config.get(f"{prefix}_{indicator}_output", config.get(f"{prefix}_output", "ma")))
 
 
 def _decode_rule(prefix: str, config: dict[str, Any], cache: IndicatorCache) -> RuleConfig | None:
@@ -139,7 +153,7 @@ def decode_config(config: dict[str, Any], cache: IndicatorCache) -> Policy | Non
         sl_params = (
             int(config.get("sl_bb_period", 20)),
             float(config.get("sl_bb_std", 2.0)),
-            str(config.get("sl_bb_matype", "sma")),
+            str(config.get("sl_bb_ma_type", "sma")),
         )
 
     tp_type = str(config.get("tp_type", "pct"))
@@ -155,7 +169,7 @@ def decode_config(config: dict[str, Any], cache: IndicatorCache) -> Policy | Non
         tp_params = (
             int(config.get("tp_bb_period", 20)),
             float(config.get("tp_bb_std", 2.0)),
-            str(config.get("tp_bb_matype", "sma")),
+            str(config.get("tp_bb_ma_type", "sma")),
         )
 
     return Policy(

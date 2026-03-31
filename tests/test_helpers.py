@@ -267,3 +267,55 @@ def test_find_strategy_returns_structured_object(monkeypatch):
     assert result.backend == "cobra_py_native"
     assert result.raw_backend_object is None
     assert result.train_data is not None
+
+
+def test_run_optimiser_walk_forward_uses_full_data(monkeypatch):
+    idx = pd.date_range("2024-01-01", periods=10, freq="D")
+    full = pd.DataFrame(
+        {
+            "open": [float(100 + i) for i in range(10)],
+            "high": [float(101 + i) for i in range(10)],
+            "low": [float(99 + i) for i in range(10)],
+            "close": [float(100 + i) for i in range(10)],
+            "volume": [1000.0 for _ in range(10)],
+        },
+        index=idx,
+    )
+    train = full.iloc[:7].copy()
+    test = full.iloc[7:].copy()
+
+    class _StubOptimiserResult:
+        best_policy = {"ok": True}
+        best_score = 0.0
+
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr("cobra_py.helpers.load_ohlcv", lambda *args, **kwargs: full)
+    monkeypatch.setattr("cobra_py.helpers.preprocess", lambda *args, **kwargs: (train, test))
+    monkeypatch.setattr("cobra_py.helpers.get_active_registry", lambda *args, **kwargs: [])
+    monkeypatch.setattr("cobra_py.helpers.precompute_all", lambda *args, **kwargs: object())
+    monkeypatch.setattr("cobra_py.helpers.build_config_space", lambda *args, **kwargs: object())
+    monkeypatch.setattr("cobra_py.helpers._run_with_optimiser", lambda *args, **kwargs: _StubOptimiserResult())
+    monkeypatch.setattr("cobra_py.helpers.generate_report", lambda *args, **kwargs: {"summary": {}, "best_metrics": {}})
+
+    def _fake_walk_forward_validate(data, *args, **kwargs):
+        captured["rows"] = len(data)
+        captured["start"] = data.index.min()
+        captured["end"] = data.index.max()
+        return {"wf": True}
+
+    monkeypatch.setattr("cobra_py.helpers.walk_forward_validate", _fake_walk_forward_validate)
+    monkeypatch.setattr("cobra_py.helpers.plot_equity_curves", lambda *args, **kwargs: "chart")
+
+    config = {
+        "data": {"min_bars": 1, "train_split": 0.7},
+        "policy": {"n_entry_rules": 1, "n_exit_rules": 0},
+        "validation": {"walk_forward": True, "n_splits": 3, "train_pct": 0.7},
+    }
+    out = find_strategy(source=full, config=config, run_walk_forward=True, evaluate_oos=False)
+
+    assert captured["rows"] == len(full)
+    assert captured["rows"] != len(test)
+    assert captured["start"] == full.index.min()
+    assert captured["end"] == full.index.max()
+    assert out.walk_forward == {"wf": True}

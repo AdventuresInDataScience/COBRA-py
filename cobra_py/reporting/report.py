@@ -26,7 +26,7 @@ OBJECTIVE_TO_METRIC = {
 
 def _as_serialisable(value: Any) -> Any:
     if is_dataclass(value):
-        return asdict(value)
+        return _as_serialisable(asdict(value))
     if isinstance(value, np.ndarray):
         return value.tolist()
     if isinstance(value, np.generic):
@@ -67,11 +67,45 @@ def _format_comparand(rule) -> str:
 
 def _format_rule(rule, idx: int, logic: str) -> str:
     lhs = _rule_series_name(rule)
-    rhs = _format_comparand(rule)
+    archetype = str(getattr(rule, "archetype", "comparison")).lower()
     group_suffix = ""
     if str(logic).strip().lower() == "dnf":
         group_suffix = f" [group {int(rule.group_id or 0)}]"
-    return f"  Rule {idx}:{group_suffix} {lhs} {rule.operator} {rhs}"
+
+    if archetype == "comparison":
+        if isinstance(rule.comparand, (int, float)):
+            expr = f"{lhs} {rule.operator} {float(rule.comparand)}"
+        elif rule.comparand == "price":
+            # Engine evaluates price OP indicator for comparison-vs-price rules.
+            expr = f"price {rule.operator} {lhs}"
+        elif rule.comparand == "indicator2" and rule.indicator2:
+            rhs = _format_comparand(rule)
+            expr = f"{lhs} {rule.operator} {rhs}"
+        else:
+            expr = f"{lhs} {rule.operator} {_format_comparand(rule)}"
+    elif archetype == "crossover":
+        expr = f"{lhs} {rule.operator} {_format_comparand(rule)}"
+    elif archetype == "band_test":
+        # Engine uses price vs selected band side.
+        comparator = ">" if rule.operator in {">", "crosses_above"} else "<"
+        expr = f"price {comparator} {lhs}"
+    elif archetype == "pattern":
+        lookback = int(rule.lookback or 20)
+        if rule.operator == "nbar_high":
+            expr = f"price makes {lookback}-bar high"
+        elif rule.operator == "nbar_low":
+            expr = f"price makes {lookback}-bar low"
+        else:
+            expr = f"price rises for {lookback} consecutive bars"
+    elif archetype == "derivative":
+        expr = f"delta({lhs}) {rule.operator} {_format_comparand(rule)}"
+    elif archetype == "stat_test":
+        lookback = int(rule.lookback or 20)
+        expr = f"zscore({lhs}, lookback={lookback}) {rule.operator} {_format_comparand(rule)}"
+    else:
+        expr = f"{lhs} {rule.operator} {_format_comparand(rule)}"
+
+    return f"  Rule {idx}:{group_suffix} [{archetype}] {expr}"
 
 
 def policy_to_human_readable(policy) -> str:

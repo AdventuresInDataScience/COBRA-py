@@ -315,7 +315,7 @@ def run_optimiser(
             )
 
         wf_result = walk_forward_validate(
-            data=test,
+            data=data,
             optimise_fn=optimise_fold,
             config=cfg,
             n_splits=int(cfg["validation"].get("n_splits", 3)),
