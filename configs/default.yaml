@@ -68,7 +68,7 @@ objective:
 
 optimiser:
   # Options: dehb, nevergrad, tpe.
-  name: 'dehb'
+  name: 'tpe'
   # DEHB backend selection:
   # - auto: prefer native DEHB package if installed, else fallback to internal seed-DE surrogate.
   # - native: require DEHB package (`pip install DEHB`) and fail fast if unavailable.
@@ -80,6 +80,8 @@ optimiser:
   #   name: dehb
   #   dehb_backend: native
   dehb_backend: 'auto'
+  # Directory where native DEHB writes checkpoint/history artifacts.
+  dehb_checkpoint_dir: './checkpoints/dehb'
   # Nevergrad optimizer class name, used when name: nevergrad.
   # Example: NGOpt, OnePlusOne, CMA, PSO.
   # Only used when name: nevergrad.
@@ -102,7 +104,7 @@ optimiser:
   # TPE sampler controls for conditional-space efficiency.
   tpe_multivariate: true
   tpe_group: true
-  tpe_n_startup_trials: 50
+  tpe_n_startup_trials: 10
   tpe_constant_liar: false
 
 validation:

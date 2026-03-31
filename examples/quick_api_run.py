@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from cobra_py import fetch_yfinance_ohlcv, find_strategy, load_config
@@ -7,11 +8,13 @@ from cobra_py import fetch_yfinance_ohlcv, find_strategy, load_config
 cfg = load_config(Path(__file__).resolve().parents[1] / "configs" / "default.yaml")
 spy = fetch_yfinance_ohlcv("SPY", start="2018-01-01", interval="1d")
 
+quick_budget = int(os.getenv("COBRA_EXAMPLE_BUDGET", str(cfg["optimiser"].get("budget", 300))))
+
 result = find_strategy(
     source=spy,
     config=cfg,
     overrides={
-        "optimiser": {"name": "dehb", "budget": 10000, "seed": 42},
+        "optimiser": {"name": "tpe", "budget": max(10, quick_budget), "seed": 42},
         "objective": {"name": "sortino", "min_trades": 1},
     },
     output_path=Path(__file__).resolve().parents[0] / "quick_api_results",

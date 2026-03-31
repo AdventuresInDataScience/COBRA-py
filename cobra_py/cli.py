@@ -114,7 +114,7 @@ def run(data_path: str, config_path: str | None, output_path: str | None, object
             seed=seed_n,
             multivariate=bool(cfg["optimiser"].get("tpe_multivariate", True)),
             group=bool(cfg["optimiser"].get("tpe_group", True)),
-            n_startup_trials=int(cfg["optimiser"].get("tpe_n_startup_trials", 20)),
+            n_startup_trials=int(cfg["optimiser"].get("tpe_n_startup_trials", 10)),
             constant_liar=bool(cfg["optimiser"].get("tpe_constant_liar", False)),
         )
     else:
@@ -135,6 +135,7 @@ def run(data_path: str, config_path: str | None, output_path: str | None, object
             min_fidelity=float(cfg["optimiser"].get("min_fidelity", 0.2)),
             max_fidelity=float(cfg["optimiser"].get("max_fidelity", 1.0)),
             n_workers=int(cfg["optimiser"].get("n_workers", 1)),
+            checkpoint_dir=str(cfg["optimiser"].get("dehb_checkpoint_dir", "checkpoints/dehb")),
         )
 
     wf_result = None
@@ -172,7 +173,7 @@ def run(data_path: str, config_path: str | None, output_path: str | None, object
                     seed=seed_n,
                     multivariate=bool(cfg["optimiser"].get("tpe_multivariate", True)),
                     group=bool(cfg["optimiser"].get("tpe_group", True)),
-                    n_startup_trials=int(cfg["optimiser"].get("tpe_n_startup_trials", 20)),
+                    n_startup_trials=int(cfg["optimiser"].get("tpe_n_startup_trials", 10)),
                     constant_liar=bool(cfg["optimiser"].get("tpe_constant_liar", False)),
                 )
             return run_dehb(
@@ -190,6 +191,7 @@ def run(data_path: str, config_path: str | None, output_path: str | None, object
                 min_fidelity=float(cfg["optimiser"].get("min_fidelity", 0.2)),
                 max_fidelity=float(cfg["optimiser"].get("max_fidelity", 1.0)),
                 n_workers=int(cfg["optimiser"].get("n_workers", 1)),
+                checkpoint_dir=str(cfg["optimiser"].get("dehb_checkpoint_dir", "checkpoints/dehb")),
             )
 
         wf_result = walk_forward_validate(

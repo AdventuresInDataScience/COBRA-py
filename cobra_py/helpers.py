@@ -178,6 +178,7 @@ def _run_with_optimiser(name: str, **kwargs):
         dehb_mutation_factor = kwargs.get("dehb_mutation_factor", 0.8)
         dehb_crossover_rate = kwargs.get("dehb_crossover_rate", 0.7)
         dehb_population_size = kwargs.get("dehb_population_size", 24)
+        dehb_checkpoint_dir = kwargs.get("dehb_checkpoint_dir", "checkpoints/dehb")
         return run_dehb(
             **common,
             mutation_factor=float(dehb_mutation_factor),
@@ -187,6 +188,7 @@ def _run_with_optimiser(name: str, **kwargs):
             min_fidelity=float(kwargs.get("min_fidelity", 0.2)),
             max_fidelity=float(kwargs.get("max_fidelity", 1.0)),
             n_workers=int(kwargs.get("n_workers", 1)),
+            checkpoint_dir=str(dehb_checkpoint_dir),
         )
     if key == "nevergrad":
         ng_algo = kwargs.get("nevergrad_algorithm", "NGOpt")
@@ -195,7 +197,7 @@ def _run_with_optimiser(name: str, **kwargs):
     if key == "tpe":
         tpe_multivariate = kwargs.get("tpe_multivariate", True)
         tpe_group = kwargs.get("tpe_group", True)
-        tpe_n_startup_trials = kwargs.get("tpe_n_startup_trials", 20)
+        tpe_n_startup_trials = kwargs.get("tpe_n_startup_trials", 10)
         tpe_constant_liar = kwargs.get("tpe_constant_liar", False)
         return run_tpe(
             **common,
@@ -222,6 +224,12 @@ def run_optimiser(
     cfg = _ensure_config_sections(cfg)
     if output_path is not None:
         cfg.setdefault("output", {})["path"] = str(output_path)
+
+    # Keep DEHB artifacts alongside run outputs unless caller overrides the default path.
+    ckpt_default_markers = {"checkpoints/dehb", "./checkpoints/dehb"}
+    current_ckpt_dir = str(cfg["optimiser"].get("dehb_checkpoint_dir", "")).strip()
+    if output_path is not None and (not current_ckpt_dir or current_ckpt_dir in ckpt_default_markers):
+        cfg["optimiser"]["dehb_checkpoint_dir"] = str(Path(cfg["output"].get("path", "./results")) / "checkpoints" / "dehb")
 
     data = load_ohlcv(
         source,
@@ -253,6 +261,7 @@ def run_optimiser(
         dehb_crossover_rate=float(cfg["optimiser"].get("dehb_crossover_rate", 0.7)),
         dehb_population_size=int(cfg["optimiser"].get("dehb_population_size", 24)),
         dehb_backend=cfg["optimiser"].get("dehb_backend", "auto"),
+        dehb_checkpoint_dir=cfg["optimiser"].get("dehb_checkpoint_dir", "checkpoints/dehb"),
         min_fidelity=float(cfg["optimiser"].get("min_fidelity", 0.2)),
         max_fidelity=float(cfg["optimiser"].get("max_fidelity", 1.0)),
         n_workers=int(cfg["optimiser"].get("n_workers", 1)),
@@ -260,7 +269,7 @@ def run_optimiser(
         nevergrad_num_workers=int(cfg["optimiser"].get("nevergrad_num_workers", 1)),
         tpe_multivariate=cfg["optimiser"].get("tpe_multivariate", True),
         tpe_group=cfg["optimiser"].get("tpe_group", True),
-        tpe_n_startup_trials=cfg["optimiser"].get("tpe_n_startup_trials", 20),
+        tpe_n_startup_trials=cfg["optimiser"].get("tpe_n_startup_trials", 10),
         tpe_constant_liar=cfg["optimiser"].get("tpe_constant_liar", False),
     )
 
@@ -293,6 +302,7 @@ def run_optimiser(
                 dehb_crossover_rate=float(cfg["optimiser"].get("dehb_crossover_rate", 0.7)),
                 dehb_population_size=int(cfg["optimiser"].get("dehb_population_size", 24)),
                 dehb_backend=cfg["optimiser"].get("dehb_backend", "auto"),
+                dehb_checkpoint_dir=cfg["optimiser"].get("dehb_checkpoint_dir", "checkpoints/dehb"),
                 min_fidelity=float(cfg["optimiser"].get("min_fidelity", 0.2)),
                 max_fidelity=float(cfg["optimiser"].get("max_fidelity", 1.0)),
                 n_workers=int(cfg["optimiser"].get("n_workers", 1)),
@@ -300,7 +310,7 @@ def run_optimiser(
                 nevergrad_num_workers=int(cfg["optimiser"].get("nevergrad_num_workers", 1)),
                 tpe_multivariate=cfg["optimiser"].get("tpe_multivariate", True),
                 tpe_group=cfg["optimiser"].get("tpe_group", True),
-                tpe_n_startup_trials=cfg["optimiser"].get("tpe_n_startup_trials", 20),
+                tpe_n_startup_trials=cfg["optimiser"].get("tpe_n_startup_trials", 10),
                 tpe_constant_liar=cfg["optimiser"].get("tpe_constant_liar", False),
             )
 

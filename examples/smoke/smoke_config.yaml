@@ -30,4 +30,4 @@ validation:
   n_splits: 2
   train_pct: 0.7
 output:
-  path: './smoke_results/'
+  path: './examples/smoke/results/'

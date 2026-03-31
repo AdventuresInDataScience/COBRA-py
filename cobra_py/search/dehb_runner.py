@@ -2,6 +2,7 @@
 
 import random
 import time
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -249,6 +250,7 @@ def _run_native_dehb_backend(
     min_fidelity: float,
     max_fidelity: float,
     n_workers: int,
+    checkpoint_dir: str,
 ) -> OptimisationResult:
     try:
         from dehb import DEHB
@@ -259,13 +261,26 @@ def _run_native_dehb_backend(
     history: list[dict] = []
     evaluate_cfg = _build_eval_cfg_fn(cache, data, obj_config, backtest_config)
 
+    dehb_cs = None
+    if hasattr(config_space, "get_dehb_configspace"):
+        dehb_cs = config_space.get_dehb_configspace()
+
     best_score = float("inf")
     best_policy = None
     best_metrics = None
 
     def objective(config, fidelity=None, **kwargs):
         nonlocal best_score, best_policy, best_metrics
-        if hasattr(config_space, "vector_to_config"):
+        if dehb_cs is not None and hasattr(config_space, "conditional_config_to_config"):
+            cfg = config_space.conditional_config_to_config(config)
+        elif dehb_cs is not None:
+            if hasattr(config, "get_dictionary"):
+                cfg = dict(config.get_dictionary())
+            elif isinstance(config, dict):
+                cfg = dict(config)
+            else:
+                cfg = dict(config)
+        elif hasattr(config_space, "vector_to_config"):
             cfg = config_space.vector_to_config(config)
         else:
             sample_seed = _seed_from_native_config(config)
@@ -294,12 +309,17 @@ def _run_native_dehb_backend(
     n_eval = int(max(1, budget))
     dehb_kwargs = {
         "f": objective,
-        "dimensions": int(getattr(config_space, "dimension_count", 1)),
         "min_fidelity": float(min_fidelity),
         "max_fidelity": float(max(max_fidelity, min_fidelity)),
         "n_workers": int(max(1, n_workers)),
         "seed": int(seed),
+        "output_path": str(Path(checkpoint_dir)),
     }
+
+    if dehb_cs is not None:
+        dehb_kwargs["cs"] = dehb_cs
+    else:
+        dehb_kwargs["dimensions"] = int(getattr(config_space, "dimension_count", 1))
 
     try:
         optimiser = DEHB(**dehb_kwargs)
@@ -362,6 +382,7 @@ def run_dehb(
     min_fidelity: float = 0.2,
     max_fidelity: float = 1.0,
     n_workers: int = 1,
+    checkpoint_dir: str = "checkpoints/dehb",
 ) -> OptimisationResult:
     backend = str(dehb_backend).strip().lower()
     if backend not in {"auto", "native", "seed_de"}:
@@ -380,6 +401,7 @@ def run_dehb(
                 min_fidelity=min_fidelity,
                 max_fidelity=max_fidelity,
                 n_workers=n_workers,
+                checkpoint_dir=checkpoint_dir,
             )
         except ImportError:
             if backend == "native":

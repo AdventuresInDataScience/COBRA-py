@@ -16,6 +16,66 @@ _RULE_OPERATORS = [">", "<", "==", "crosses_above", "crosses_below", "nbar_high"
 _LOGIC_OPTIONS = ["and", "or", "dnf"]
 
 
+def _rule_slot_index(prefix: str) -> int | None:
+    try:
+        return int(str(prefix).split("_", 2)[1])
+    except (IndexError, ValueError):
+        return None
+
+
+def _active_choices_for_prefix(prefix: str) -> list[bool]:
+    slot_idx = _rule_slot_index(prefix)
+    if str(prefix).startswith("entry_") and slot_idx is not None:
+        if slot_idx == 0:
+            return [True]
+        if slot_idx in {1, 2}:
+            return [True, True, True, False]
+    return [False, True]
+
+
+def _active_choices_and_weights_for_configspace(prefix: str) -> tuple[list[bool], list[float]]:
+    slot_idx = _rule_slot_index(prefix)
+    if str(prefix).startswith("entry_") and slot_idx is not None:
+        if slot_idx == 0:
+            return [True], [1.0]
+        if slot_idx in {1, 2}:
+            return [True, False], [0.75, 0.25]
+    return [False, True], [0.5, 0.5]
+
+
+def _supports_band_from_outputs(outputs: list[str]) -> bool:
+    outs = set(outputs)
+    return "upper" in outs and "lower" in outs
+
+
+def _archetypes_for_indicator_name(indicator_name: str, registry_by_name: dict[str, IndicatorDef]) -> list[str]:
+    ind = registry_by_name.get(str(indicator_name))
+    if ind is None:
+        return [x for x in _RULE_ARCHETYPES if x != "band_test"]
+    if _supports_band_from_outputs(list(ind.outputs)):
+        return list(_RULE_ARCHETYPES)
+    return [x for x in _RULE_ARCHETYPES if x != "band_test"]
+
+
+def _operators_for_archetype_name(archetype: str) -> list[str]:
+    key = str(archetype).strip().lower()
+    if key == "band_test":
+        return [">", "<"]
+    if key == "crossover":
+        return ["crosses_above", "crosses_below"]
+    if key == "pattern":
+        return ["nbar_high", "nbar_low", "consecutive"]
+    if key in {"comparison", "stat_test", "derivative"}:
+        return [">", "<", "=="]
+    return [">", "<", "=="]
+
+
+def _threshold_capable_for_indicator(indicator_name: str, archetype: str) -> bool:
+    if str(archetype) in {"band_test", "pattern"}:
+        return False
+    return str(indicator_name) in {"rsi", "stoch", "cci", "roc", "adx"}
+
+
 def _expand_numeric_range_spec(value: Any, fallback: list[float]) -> list[float]:
     if value is None:
         return fallback
@@ -87,6 +147,7 @@ class SimpleConfigSpace:
         self._rng = random.Random(self.seed)
         self._rule_indicators = _valid_rule_indicators(self.registry)
         self._indicator_names = [ind.name for ind in self._rule_indicators]
+        self._conditional_cs_cache = None
         bt = self.backtest_config or {}
         self._leverage_range = _expand_numeric_range_spec(bt.get("leverage_range"), [float(bt.get("leverage", 1.0))])
         self._borrow_cost_rate_range = _expand_numeric_range_spec(bt.get("borrow_cost_rate_range"), [float(bt.get("borrow_cost_rate", 0.0))])
@@ -122,7 +183,7 @@ class SimpleConfigSpace:
         add_cat("borrow_cost_rate", [float(x) for x in self._borrow_cost_rate_range])
 
         for prefix in [f"entry_{i}" for i in range(self.n_entry_rules)] + [f"exit_{i}" for i in range(self.n_exit_rules)]:
-            add_cat(f"{prefix}_active", [False, True])
+            add_cat(f"{prefix}_active", _active_choices_for_prefix(prefix))
             add_cat(f"{prefix}_archetype", _RULE_ARCHETYPES)
             add_cat(f"{prefix}_indicator", self._indicator_names)
             add_cat(f"{prefix}_operator", _RULE_OPERATORS)
@@ -150,26 +211,14 @@ class SimpleConfigSpace:
         return "upper" in outs and "lower" in outs
 
     def _archetypes_for_indicator(self, indicator_name: str) -> list[str]:
-        if self._supports_band(indicator_name):
-            return list(_RULE_ARCHETYPES)
-        return [x for x in _RULE_ARCHETYPES if x != "band_test"]
+        by_name = {ind.name: ind for ind in self._rule_indicators}
+        return _archetypes_for_indicator_name(indicator_name, by_name)
 
     def _operators_for_archetype(self, archetype: str) -> list[str]:
-        key = str(archetype).strip().lower()
-        if key == "band_test":
-            return [">", "<"]
-        if key == "crossover":
-            return ["crosses_above", "crosses_below"]
-        if key == "pattern":
-            return ["nbar_high", "nbar_low", "consecutive"]
-        if key in {"comparison", "stat_test", "derivative"}:
-            return [">", "<", "=="]
-        return [">", "<", "=="]
+        return _operators_for_archetype_name(archetype)
 
     def _threshold_capable(self, indicator_name: str, archetype: str) -> bool:
-        if str(archetype) in {"band_test", "pattern"}:
-            return False
-        return str(indicator_name) in {"rsi", "stoch", "cci", "roc", "adx"}
+        return _threshold_capable_for_indicator(indicator_name, archetype)
 
     def _set_rule_indicator_params_from_rng(self, rng: random.Random, prefix: str, indicator_name: str, cfg: dict[str, Any]) -> None:
         ind = self._indicator(indicator_name)
@@ -198,7 +247,8 @@ class SimpleConfigSpace:
         archetype = self._pick_rng(rng, self._archetypes_for_indicator(indicator_name), self._archetypes_for_indicator(indicator_name))
         operator = self._pick_rng(rng, self._operators_for_archetype(archetype), self._operators_for_archetype(archetype))
 
-        cfg[f"{prefix}_active"] = self._pick_rng(rng, [False, True], [False, True])
+        active_choices = _active_choices_for_prefix(prefix)
+        cfg[f"{prefix}_active"] = self._pick_rng(rng, active_choices, active_choices)
         cfg[f"{prefix}_indicator"] = indicator_name
         cfg[f"{prefix}_archetype"] = archetype
         cfg[f"{prefix}_operator"] = operator
@@ -216,11 +266,12 @@ class SimpleConfigSpace:
 
     def _suggest_rule_slot_optuna(self, trial, prefix: str, cfg: dict[str, Any]) -> None:
         indicator_name = trial.suggest_categorical(f"{prefix}_indicator", self._indicator_names)
-        # Optuna requires a fixed categorical domain per parameter name across all trials.
-        archetype = trial.suggest_categorical(f"{prefix}_archetype", _RULE_ARCHETYPES)
-        operator = trial.suggest_categorical(f"{prefix}_operator", _RULE_OPERATORS)
+        archetypes = self._archetypes_for_indicator(indicator_name)
+        archetype = trial.suggest_categorical(f"{prefix}_archetype|{indicator_name}", archetypes)
+        operators = self._operators_for_archetype(archetype)
+        operator = trial.suggest_categorical(f"{prefix}_operator|{indicator_name}|{archetype}", operators)
 
-        cfg[f"{prefix}_active"] = trial.suggest_categorical(f"{prefix}_active", [False, True])
+        cfg[f"{prefix}_active"] = trial.suggest_categorical(f"{prefix}_active", _active_choices_for_prefix(prefix))
         cfg[f"{prefix}_indicator"] = indicator_name
         cfg[f"{prefix}_archetype"] = archetype
         cfg[f"{prefix}_operator"] = operator
@@ -228,7 +279,13 @@ class SimpleConfigSpace:
         cfg[f"{prefix}_group_id"] = trial.suggest_int(f"{prefix}_group_id", 0, 2)
         cfg[f"{prefix}_band_side"] = trial.suggest_categorical(f"{prefix}_band_side", ["upper", "middle", "lower"])
 
-        cfg[f"{prefix}_comparand_mode"] = trial.suggest_categorical(f"{prefix}_comparand_mode", ["price", "threshold"])
+        if self._threshold_capable(indicator_name, archetype):
+            cfg[f"{prefix}_comparand_mode"] = trial.suggest_categorical(
+                f"{prefix}_comparand_mode|{indicator_name}|{archetype}",
+                ["price", "threshold"],
+            )
+        else:
+            cfg[f"{prefix}_comparand_mode"] = "price"
         cfg[f"{prefix}_threshold"] = float(trial.suggest_categorical(f"{prefix}_threshold", _RSI_THRESHOLDS))
 
         self._set_rule_indicator_params_from_optuna(trial, prefix, indicator_name, cfg)
@@ -278,6 +335,9 @@ class SimpleConfigSpace:
 
     def _finalize_config(self, cfg: dict[str, Any]) -> dict[str, Any]:
         for prefix in self._rule_prefixes():
+            if str(prefix).startswith("entry_") and _rule_slot_index(prefix) == 0:
+                cfg[f"{prefix}_active"] = True
+
             indicator = str(cfg.get(f"{prefix}_indicator", "rsi"))
             valid_arch = self._archetypes_for_indicator(indicator)
             archetype = str(cfg.get(f"{prefix}_archetype", valid_arch[0]))
@@ -346,20 +406,195 @@ class SimpleConfigSpace:
     def get_nevergrad_parametrization(self):
         import nevergrad as ng
 
-        kwargs: dict[str, Any] = {}
-        for dim in self._dims:
-            name = dim["name"]
-            if dim["kind"] == "cat":
-                kwargs[name] = ng.p.Choice(dim["choices"])
-            elif dim["kind"] == "int":
-                kwargs[name] = ng.p.Scalar(lower=int(dim["low"]), upper=int(dim["high"])).set_integer_casting()
-            else:
-                kwargs[name] = ng.p.Scalar(lower=float(dim["low"]), upper=float(dim["high"]))
+        kwargs: dict[str, Any] = {
+            "entry_logic": ng.p.Choice(_LOGIC_OPTIONS),
+            "exit_logic": ng.p.Choice(_LOGIC_OPTIONS),
+            "sl_type": ng.p.Choice(["pct", "atr_mult", "swing_low", "bb_lower", "trailing_atr"]),
+            "tp_type": ng.p.Choice(["pct", "atr_mult", "risk_reward", "swing_high", "bb_upper"]),
+            "sl_pct": ng.p.Choice([x for x in _RATIO_STEP_VALUES if x <= 0.1]),
+            "sl_atr_mult": ng.p.Choice(_SL_ATR_MULT_VALUES),
+            "sl_atr_period": ng.p.Choice([7, 10, 14, 20]),
+            "sl_swing_lookback": ng.p.Scalar(lower=5, upper=50).set_integer_casting(),
+            "tp_pct": ng.p.Choice(_RATIO_STEP_VALUES),
+            "tp_atr_mult": ng.p.Choice(_TP_ATR_MULT_VALUES),
+            "tp_atr_period": ng.p.Choice([7, 10, 14, 20]),
+            "tp_rr": ng.p.Choice(_TP_RR_VALUES),
+            "tp_swing_lookback": ng.p.Scalar(lower=5, upper=100).set_integer_casting(),
+            "leverage": ng.p.Choice([float(x) for x in self._leverage_range]),
+            "borrow_cost_rate": ng.p.Choice([float(x) for x in self._borrow_cost_rate_range]),
+        }
+
+        for prefix in self._rule_prefixes():
+            kwargs[f"{prefix}_active"] = ng.p.Choice(_active_choices_for_prefix(prefix))
+
+            indicator_branches = []
+            for ind in self._rule_indicators:
+                branch_kwargs: dict[str, Any] = {
+                    "indicator": ind.name,
+                    "archetype": ng.p.Choice(self._archetypes_for_indicator(ind.name)),
+                    "operator": ng.p.Choice(_RULE_OPERATORS),
+                    "comparand_mode": ng.p.Choice(["price", "threshold"]),
+                    "threshold": ng.p.Choice(_RSI_THRESHOLDS),
+                    "lookback": ng.p.Scalar(lower=5, upper=100).set_integer_casting(),
+                    "group_id": ng.p.Scalar(lower=0, upper=2).set_integer_casting(),
+                    "band_side": ng.p.Choice(["upper", "middle", "lower"]),
+                }
+
+                for p_name, p_values in ind.param_grid.items():
+                    branch_kwargs[f"{ind.name}_{p_name}"] = ng.p.Choice(list(p_values))
+                branch_kwargs[f"{ind.name}_output"] = ng.p.Choice(_indicator_output_choices(ind))
+
+                indicator_branches.append(ng.p.Instrumentation(**branch_kwargs))
+
+            kwargs[f"{prefix}_rule"] = ng.p.Choice(indicator_branches)
+
         return ng.p.Instrumentation(**kwargs)
 
     def decode_nevergrad_candidate(self, candidate) -> dict[str, Any]:
-        cfg = {"n_entry_rules": self.n_entry_rules, "n_exit_rules": self.n_exit_rules}
-        cfg.update(candidate.kwargs)
+        raw = dict(candidate.kwargs)
+        cfg: dict[str, Any] = {"n_entry_rules": self.n_entry_rules, "n_exit_rules": self.n_exit_rules}
+
+        scalar_keys = [
+            "entry_logic",
+            "exit_logic",
+            "sl_type",
+            "tp_type",
+            "sl_pct",
+            "sl_atr_mult",
+            "sl_atr_period",
+            "sl_swing_lookback",
+            "tp_pct",
+            "tp_atr_mult",
+            "tp_atr_period",
+            "tp_rr",
+            "tp_swing_lookback",
+            "leverage",
+            "borrow_cost_rate",
+        ]
+        for key in scalar_keys:
+            if key in raw:
+                cfg[key] = raw[key]
+
+        for prefix in self._rule_prefixes():
+            cfg[f"{prefix}_active"] = bool(raw.get(f"{prefix}_active", _active_choices_for_prefix(prefix)[0]))
+            payload = raw.get(f"{prefix}_rule")
+            if isinstance(payload, tuple) and len(payload) == 2 and isinstance(payload[1], dict):
+                branch = dict(payload[1])
+            elif isinstance(payload, dict):
+                branch = dict(payload)
+            elif hasattr(payload, "kwargs"):
+                branch = dict(getattr(payload, "kwargs"))
+            else:
+                branch = {}
+
+            indicator_name = str(branch.get("indicator", self._indicator_names[0]))
+            cfg[f"{prefix}_indicator"] = indicator_name
+            cfg[f"{prefix}_archetype"] = str(branch.get("archetype", self._archetypes_for_indicator(indicator_name)[0]))
+            cfg[f"{prefix}_operator"] = str(branch.get("operator", self._operators_for_archetype(cfg[f"{prefix}_archetype"])[0]))
+            cfg[f"{prefix}_comparand_mode"] = str(branch.get("comparand_mode", "price"))
+            cfg[f"{prefix}_threshold"] = float(branch.get("threshold", 50.0))
+            cfg[f"{prefix}_lookback"] = int(branch.get("lookback", 20))
+            cfg[f"{prefix}_group_id"] = int(branch.get("group_id", 0))
+            cfg[f"{prefix}_band_side"] = str(branch.get("band_side", "middle"))
+
+            ind = self._indicator(indicator_name)
+            if ind is None:
+                continue
+            for p_name, p_values in ind.param_grid.items():
+                cfg[f"{prefix}_{indicator_name}_{p_name}"] = branch.get(f"{indicator_name}_{p_name}", list(p_values)[0])
+            cfg[f"{prefix}_{indicator_name}_output"] = branch.get(
+                f"{indicator_name}_output",
+                _indicator_output_choices(ind)[0],
+            )
+
+        return self._finalize_config(cfg)
+
+    def get_dehb_configspace(self):
+        if self._conditional_cs_cache is not None:
+            return self._conditional_cs_cache
+        try:
+            self._conditional_cs_cache = build_configspace_conditional(
+                n_entry_rules=self.n_entry_rules,
+                n_exit_rules=self.n_exit_rules,
+                registry=self._rule_indicators,
+                seed=self.seed,
+                backtest_config=self.backtest_config,
+            )
+        except ImportError:
+            self._conditional_cs_cache = None
+        return self._conditional_cs_cache
+
+    def conditional_config_to_config(self, raw_config: Any) -> dict[str, Any]:
+        if hasattr(raw_config, "get_dictionary"):
+            raw = dict(raw_config.get_dictionary())
+        elif isinstance(raw_config, dict):
+            raw = dict(raw_config)
+        else:
+            try:
+                raw = dict(raw_config)
+            except Exception:
+                raw = {}
+
+        cfg: dict[str, Any] = {
+            "n_entry_rules": self.n_entry_rules,
+            "n_exit_rules": self.n_exit_rules,
+            "entry_logic": raw.get("entry_logic", _LOGIC_OPTIONS[0]),
+            "exit_logic": raw.get("exit_logic", _LOGIC_OPTIONS[0]),
+            "sl_type": raw.get("sl_type", "pct"),
+            "tp_type": raw.get("tp_type", "pct"),
+            "sl_pct": float(raw.get("sl_pct", 0.02)),
+            "sl_atr_mult": float(raw.get("sl_atr_mult", 2.0)),
+            "sl_atr_period": int(raw.get("sl_atr_period", 14)),
+            "sl_swing_lookback": int(raw.get("sl_swing_lookback", 20)),
+            "tp_pct": float(raw.get("tp_pct", 0.03)),
+            "tp_atr_mult": float(raw.get("tp_atr_mult", 3.0)),
+            "tp_atr_period": int(raw.get("tp_atr_period", 14)),
+            "tp_rr": float(raw.get("tp_rr", 2.0)),
+            "tp_swing_lookback": int(raw.get("tp_swing_lookback", 30)),
+            "leverage": float(raw.get("leverage", 1.0)),
+            "borrow_cost_rate": float(raw.get("borrow_cost_rate", 0.0)),
+        }
+
+        for prefix in self._rule_prefixes():
+            active_choices = _active_choices_for_prefix(prefix)
+            cfg[f"{prefix}_active"] = bool(raw.get(f"{prefix}_active", active_choices[0]))
+
+            indicator_name = str(raw.get(f"{prefix}_indicator", self._indicator_names[0]))
+            cfg[f"{prefix}_indicator"] = indicator_name
+
+            archetype_key = f"{prefix}_archetype|{indicator_name}"
+            archetype = str(raw.get(archetype_key, self._archetypes_for_indicator(indicator_name)[0]))
+            cfg[f"{prefix}_archetype"] = archetype
+
+            operator_key = f"{prefix}_operator|{indicator_name}|{archetype}"
+            cfg[f"{prefix}_operator"] = str(raw.get(operator_key, self._operators_for_archetype(archetype)[0]))
+
+            cfg[f"{prefix}_lookback"] = int(raw.get(f"{prefix}_lookback", 20))
+            cfg[f"{prefix}_group_id"] = int(raw.get(f"{prefix}_group_id", 0))
+            cfg[f"{prefix}_band_side"] = str(raw.get(f"{prefix}_band_side", "middle"))
+
+            comparand_mode_key = f"{prefix}_comparand_mode|{indicator_name}|{archetype}"
+            if self._threshold_capable(indicator_name, archetype):
+                cfg[f"{prefix}_comparand_mode"] = str(raw.get(comparand_mode_key, "price"))
+                threshold_key = f"{prefix}_threshold|{indicator_name}|{archetype}"
+                cfg[f"{prefix}_threshold"] = float(raw.get(threshold_key, 50.0))
+            else:
+                cfg[f"{prefix}_comparand_mode"] = "price"
+                cfg[f"{prefix}_threshold"] = float(raw.get(f"{prefix}_threshold", 50.0))
+
+            ind = self._indicator(indicator_name)
+            if ind is None:
+                continue
+            for p_name, p_values in ind.param_grid.items():
+                cfg[f"{prefix}_{indicator_name}_{p_name}"] = raw.get(
+                    f"{prefix}_{indicator_name}_{p_name}",
+                    list(p_values)[0],
+                )
+            cfg[f"{prefix}_{indicator_name}_output"] = raw.get(
+                f"{prefix}_{indicator_name}_output",
+                _indicator_output_choices(ind)[0],
+            )
+
         return self._finalize_config(cfg)
 
     def sample_vector(self, rng: random.Random) -> list[float]:
@@ -430,4 +665,108 @@ def build_config_space(
 
 def sample_and_validate(cs: SimpleConfigSpace, n_samples: int = 10) -> list[dict[str, Any]]:
     return [cs.sample_configuration() for _ in range(n_samples)]
+
+
+def build_configspace_conditional(
+    n_entry_rules: int,
+    n_exit_rules: int,
+    registry: list[IndicatorDef],
+    seed: int | None = None,
+    backtest_config: dict[str, Any] | None = None,
+):
+    try:
+        from ConfigSpace import (
+            CategoricalHyperparameter,
+            ConfigurationSpace,
+            Constant,
+            UniformIntegerHyperparameter,
+        )
+        from ConfigSpace.conditions import EqualsCondition
+    except ImportError as exc:
+        raise ImportError("Conditional ConfigSpace requires ConfigSpace package. Install with `pip install ConfigSpace`.") from exc
+
+    bt = backtest_config or {}
+    leverage_range = _expand_numeric_range_spec(bt.get("leverage_range"), [float(bt.get("leverage", 1.0))])
+    borrow_cost_rate_range = _expand_numeric_range_spec(bt.get("borrow_cost_rate_range"), [float(bt.get("borrow_cost_rate", 0.0))])
+
+    rule_indicators = _valid_rule_indicators(registry)
+    indicator_names = [ind.name for ind in rule_indicators]
+    registry_by_name = {ind.name: ind for ind in rule_indicators}
+
+    cs = ConfigurationSpace(seed=seed)
+    cs.add_hyperparameter(CategoricalHyperparameter("entry_logic", _LOGIC_OPTIONS))
+    cs.add_hyperparameter(CategoricalHyperparameter("exit_logic", _LOGIC_OPTIONS))
+
+    cs.add_hyperparameter(CategoricalHyperparameter("sl_type", ["pct", "atr_mult", "swing_low", "bb_lower", "trailing_atr"]))
+    cs.add_hyperparameter(CategoricalHyperparameter("tp_type", ["pct", "atr_mult", "risk_reward", "swing_high", "bb_upper"]))
+    cs.add_hyperparameter(CategoricalHyperparameter("sl_pct", [x for x in _RATIO_STEP_VALUES if x <= 0.1]))
+    cs.add_hyperparameter(CategoricalHyperparameter("sl_atr_mult", _SL_ATR_MULT_VALUES))
+    cs.add_hyperparameter(CategoricalHyperparameter("sl_atr_period", [7, 10, 14, 20]))
+    cs.add_hyperparameter(UniformIntegerHyperparameter("sl_swing_lookback", lower=5, upper=50))
+    cs.add_hyperparameter(CategoricalHyperparameter("tp_pct", _RATIO_STEP_VALUES))
+    cs.add_hyperparameter(CategoricalHyperparameter("tp_atr_mult", _TP_ATR_MULT_VALUES))
+    cs.add_hyperparameter(CategoricalHyperparameter("tp_atr_period", [7, 10, 14, 20]))
+    cs.add_hyperparameter(CategoricalHyperparameter("tp_rr", _TP_RR_VALUES))
+    cs.add_hyperparameter(UniformIntegerHyperparameter("tp_swing_lookback", lower=5, upper=100))
+    cs.add_hyperparameter(CategoricalHyperparameter("leverage", [float(x) for x in leverage_range]))
+    cs.add_hyperparameter(CategoricalHyperparameter("borrow_cost_rate", [float(x) for x in borrow_cost_rate_range]))
+
+    prefixes = [f"entry_{i}" for i in range(int(n_entry_rules))] + [f"exit_{i}" for i in range(int(n_exit_rules))]
+    for prefix in prefixes:
+        active_choices, active_weights = _active_choices_and_weights_for_configspace(prefix)
+        if len(active_choices) == 1:
+            active_hp = Constant(f"{prefix}_active", active_choices[0])
+        else:
+            active_hp = CategoricalHyperparameter(f"{prefix}_active", active_choices, weights=active_weights)
+        cs.add_hyperparameter(active_hp)
+
+        indicator_hp = CategoricalHyperparameter(f"{prefix}_indicator", indicator_names)
+        cs.add_hyperparameter(indicator_hp)
+        cs.add_condition(EqualsCondition(indicator_hp, active_hp, True))
+
+        lookback_hp = UniformIntegerHyperparameter(f"{prefix}_lookback", lower=5, upper=100)
+        group_hp = UniformIntegerHyperparameter(f"{prefix}_group_id", lower=0, upper=2)
+        band_side_hp = CategoricalHyperparameter(f"{prefix}_band_side", ["upper", "middle", "lower"])
+        cs.add_hyperparameter(lookback_hp)
+        cs.add_hyperparameter(group_hp)
+        cs.add_hyperparameter(band_side_hp)
+        cs.add_condition(EqualsCondition(lookback_hp, active_hp, True))
+        cs.add_condition(EqualsCondition(group_hp, active_hp, True))
+        cs.add_condition(EqualsCondition(band_side_hp, active_hp, True))
+
+        for ind in rule_indicators:
+            archetypes = _archetypes_for_indicator_name(ind.name, registry_by_name)
+            archetype_hp = CategoricalHyperparameter(f"{prefix}_archetype|{ind.name}", archetypes)
+            cs.add_hyperparameter(archetype_hp)
+            cs.add_condition(EqualsCondition(archetype_hp, indicator_hp, ind.name))
+
+            for archetype in archetypes:
+                operators = _operators_for_archetype_name(archetype)
+                operator_hp = CategoricalHyperparameter(f"{prefix}_operator|{ind.name}|{archetype}", operators)
+                cs.add_hyperparameter(operator_hp)
+                cs.add_condition(EqualsCondition(operator_hp, archetype_hp, archetype))
+
+                if _threshold_capable_for_indicator(ind.name, archetype):
+                    comparand_mode_hp = CategoricalHyperparameter(
+                        f"{prefix}_comparand_mode|{ind.name}|{archetype}",
+                        ["price", "threshold"],
+                    )
+                    threshold_hp = CategoricalHyperparameter(
+                        f"{prefix}_threshold|{ind.name}|{archetype}",
+                        _RSI_THRESHOLDS,
+                    )
+                    cs.add_hyperparameter(comparand_mode_hp)
+                    cs.add_hyperparameter(threshold_hp)
+                    cs.add_condition(EqualsCondition(comparand_mode_hp, archetype_hp, archetype))
+                    cs.add_condition(EqualsCondition(threshold_hp, comparand_mode_hp, "threshold"))
+
+            for p_name, p_values in ind.param_grid.items():
+                hp = CategoricalHyperparameter(f"{prefix}_{ind.name}_{p_name}", list(p_values))
+                cs.add_hyperparameter(hp)
+                cs.add_condition(EqualsCondition(hp, indicator_hp, ind.name))
+            out_hp = CategoricalHyperparameter(f"{prefix}_{ind.name}_output", _indicator_output_choices(ind))
+            cs.add_hyperparameter(out_hp)
+            cs.add_condition(EqualsCondition(out_hp, indicator_hp, ind.name))
+
+    return cs
 

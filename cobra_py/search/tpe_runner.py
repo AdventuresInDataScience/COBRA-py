@@ -22,7 +22,7 @@ def run_tpe(
     seed: int = 42,
     multivariate: bool = True,
     group: bool = True,
-    n_startup_trials: int = 20,
+    n_startup_trials: int = 10,
     constant_liar: bool = False,
 ) -> OptimisationResult:
     try:
@@ -44,7 +44,8 @@ def run_tpe(
         n_startup_trials=int(max(1, n_startup_trials)),
         constant_liar=bool(constant_liar),
     )
-    study = optuna.create_study(direction="minimize", sampler=sampler)
+    pruner = optuna.pruners.MedianPruner(n_startup_trials=int(max(1, n_startup_trials)), n_warmup_steps=0)
+    study = optuna.create_study(direction="minimize", sampler=sampler, pruner=pruner)
 
     def sample_cfg(sample_seed: int) -> dict[str, Any]:
         if hasattr(config_space, "sample_with_seed"):
@@ -65,12 +66,40 @@ def run_tpe(
         if policy is None:
             score = 999.0
             metrics = {"n_trades": 0}
+            history.append(
+                {
+                    "config": cfg,
+                    "score": float(score),
+                    "metrics": metrics,
+                    "trial_number": int(trial.number),
+                    "pruned": False,
+                }
+            )
+            return float(score)
         else:
             eval_bt_cfg = dict(backtest_config)
             if "leverage" in cfg:
                 eval_bt_cfg["leverage"] = float(cfg["leverage"])
             if "borrow_cost_rate" in cfg:
                 eval_bt_cfg["borrow_cost_rate"] = float(cfg["borrow_cost_rate"])
+
+            subset_n = max(50, int(len(data) * 0.3))
+            subset_data = data.iloc[:subset_n] if subset_n < len(data) else data
+            intermediate_metrics = run_backtest(policy, cache, subset_data, eval_bt_cfg)
+            intermediate_score = compute_objective(intermediate_metrics, policy, obj_config)
+            trial.report(float(intermediate_score), step=0)
+            if trial.should_prune():
+                history.append(
+                    {
+                        "config": cfg,
+                        "score": float(intermediate_score),
+                        "metrics": intermediate_metrics,
+                        "trial_number": int(trial.number),
+                        "pruned": True,
+                        "stage": "subset_30pct",
+                    }
+                )
+                raise optuna.TrialPruned()
 
             metrics = run_backtest(policy, cache, data, eval_bt_cfg)
             score = compute_objective(metrics, policy, obj_config)
@@ -81,6 +110,7 @@ def run_tpe(
                 "score": float(score),
                 "metrics": metrics,
                 "trial_number": int(trial.number),
+                "pruned": False,
             }
         )
 

@@ -27,7 +27,7 @@ This folder contains block-runnable `#%%` scripts that work like notebooks in VS
 From project root:
 
 ```bash
-uv pip install -e .
+uv pip install -e .[optim]
 uv pip install yfinance ipython jupyter matplotlib plotly
 ```
 
@@ -61,6 +61,8 @@ uv run python examples/spy_showcase.py
 - `metric_score_comparison.png`
 - per-run `strategy.txt` files
 - per-scenario report files and effective config snapshots
+
+When a run uses native DEHB, checkpoint/history artifacts are written under that run's output directory (for example, `examples/results_api_demo/<run>/checkpoints/dehb/`).
 
 ## Interpreting The Showcase
 

@@ -9,7 +9,7 @@ From the `COBRA-py` root folder:
 ```bash
 uv sync
 uv run pytest tests -q
-uv run cobra-py run --data smoke_data.csv --config smoke_config.yaml
+uv run cobra-py run --data examples/smoke/smoke_data.csv --config examples/smoke/smoke_config.yaml
 ```
 
 Then run the showcase:
@@ -18,9 +18,9 @@ Then run the showcase:
 uv run python examples/spy_showcase.py
 ```
 
-Expected outputs are written under [smoke_results](smoke_results) and [examples/showcase_results](examples/showcase_results).
+Expected outputs are written under [examples/smoke/results](examples/smoke/results) and [examples/showcase_results](examples/showcase_results).
 
-Note: default optimiser budget in [configs/default.yaml](configs/default.yaml) is now `100` for faster iteration. Increase this when you want deeper search.
+Note: defaults in [configs/default.yaml](configs/default.yaml) are now `optimiser.name: tpe` and `optimiser.budget: 300`. Increase budget when you want deeper search.
 
 ## Examples
 
@@ -170,6 +170,7 @@ $$
 - `optimiser.budget`: number of sampled configurations (default `100` for quick first runs).
 - `optimiser.seed`: random seed for reproducibility.
 - `optimiser.dehb_backend`: DEHB backend selector (`auto`, `native`, `seed_de`).
+- `optimiser.dehb_checkpoint_dir`: directory where native DEHB writes `dehb_state.json`, `incumbent.json`, `history.parquet.gzip`, and `dehb.log`.
 - `optimiser.min_fidelity`: lower fidelity used by native DEHB (fraction of train bars).
 - `optimiser.max_fidelity`: upper fidelity used by native DEHB.
 - `optimiser.n_workers`: DEHB parallel workers (native backend only).
@@ -210,7 +211,7 @@ optimiser:
 	seed: 42
 	tpe_multivariate: true
 	tpe_group: true
-	tpe_n_startup_trials: 40
+	tpe_n_startup_trials: 10
 	tpe_constant_liar: false
 ```
 

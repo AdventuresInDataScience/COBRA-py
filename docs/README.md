@@ -22,7 +22,7 @@ From the COBRA-py root:
 ```bash
 uv sync
 uv run pytest tests -q
-uv run cobra-py run --data smoke_data.csv --config smoke_config.yaml
+uv run cobra-py run --data examples/smoke/smoke_data.csv --config examples/smoke/smoke_config.yaml
 ```
 
 Optional showcase run:
@@ -40,5 +40,5 @@ uv run python examples/spy_showcase.py
 ## Notes
 
 - Use `uv run ...` for commands to ensure the managed environment is used.
-- Smoke outputs are written to `smoke_results/`.
+- Smoke outputs are written to `examples/smoke/results/`.
 - Example outputs are written under `examples/showcase_results/`.
